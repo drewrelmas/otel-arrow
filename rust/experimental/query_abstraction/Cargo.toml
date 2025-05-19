@@ -4,7 +4,7 @@ members = [
     "kql_plugin",
     "ottl_plugin",
     "cli",
-    "df_planning"
+    "datafusion_planning"
 ]
 resolver = "2"
 
