@@ -11,4 +11,7 @@ rust-version.workspace = true
 [dependencies]
 intermediate_language = { path = "../intermediate_language" }
 datafusion = "47"
-tokio = { version = "1.45.0", features = ["rt", "time", "net", "io-util", "sync", "macros", "rt-multi-thread"] }
+arrow = "55"
+
+[dev-dependencies]
+tokio = { version = "1.44.0", features = ["rt-multi-thread"] }

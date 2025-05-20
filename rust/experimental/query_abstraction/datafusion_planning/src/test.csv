@@ -1,6 +1,0 @@
-age,country,score,passed,flag
-25,US,45,false,true
-30,US,55,true,false
-35,CA,60,true,true
-40,US,70,true,false
-18,UK,50,false,true
