@@ -35,14 +35,7 @@ jobs:
 
       - name: Extract changelog content
         id: changelog
-        run: |
-          # Extract changelog content and save as output
-          ./.github/workflows/scripts/extract-changelog.sh /tmp/changelog_content.txt
-          # Use delimiter to handle multiline content without shell evaluation
-          EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
-          echo "content<<$EOF" >> $GITHUB_OUTPUT
-          cat /tmp/changelog_content.txt >> $GITHUB_OUTPUT
-          echo "$EOF" >> $GITHUB_OUTPUT
+        run: ./.github/workflows/scripts/extract-changelog.sh /tmp/changelog_content.txt
 
       - name: Update CHANGELOG.md
         run: ./.github/workflows/scripts/update-changelog.sh "${{ inputs.version }}" /tmp/changelog_content.txt
@@ -54,9 +47,6 @@ jobs:
           echo ""
           echo "Planned changes:"
           echo "- New version: ${{ inputs.version }}"
-          echo ""
-          echo "Changelog content:"
-          echo "${{ steps.changelog.outputs.content }}"
           echo ""
           echo "Git operations that would occur:"
           echo "  - Create branch: otelbot/release-v${{ inputs.version }}"
@@ -96,12 +86,7 @@ jobs:
           This PR prepares the repository for release v${{ inputs.version }}.
 
           ### Changes included:
-          - Updated CHANGELOG.md with release notes
-
-          ### Release Notes:
-          ```
-          ${{ steps.changelog.outputs.content }}
-          ```
+          - Updated CHANGELOG.md with new release header
 
           ### Checklist:
           - [ ] Verify CHANGELOG.md formatting and content
