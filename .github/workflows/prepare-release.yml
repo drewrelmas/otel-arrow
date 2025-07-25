@@ -55,9 +55,9 @@ jobs:
           echo "Planned changes:"
           echo "- New version: ${{ inputs.version }}"
           echo ""
-          echo "Git diff:"
+          echo "Changelog content:"
 
-          git diff
+          echo ${{ steps.changelog.outputs.content }}
 
           echo ""
           echo "Git operations that would occur:"
