@@ -23,6 +23,8 @@ jobs:
     environment: release
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-tags: true
 
       - name: Validate inputs
         run: |
@@ -101,8 +103,8 @@ jobs:
 
           # Create temporary file with new content
           {
-            # Keep everything up to ## Unreleased
-            awk '/^## Unreleased/ {print; exit}' CHANGELOG.md
+            # Keep header content and unreleased section header
+            awk '/^## Unreleased/ {print; exit} {print}' CHANGELOG.md
             echo ""
 
             # Add new release section
@@ -135,7 +137,7 @@ jobs:
 
           echo ""
           echo "Git operations that would occur:"
-          echo "  - Create branch: release-v${{ inputs.version }}"
+          echo "  - Create branch: otelbot/release-v${{ inputs.version }}"
           echo "  - Commit version updates"
           echo "  - Create pull request"
           echo ""
