@@ -49,34 +49,6 @@ jobs:
             exit 1
           fi
 
-      - name: Get last released version
-        id: last_version
-        run: |
-          # Get the latest tag
-          LAST_TAG=$(git tag --list 'v*' --sort=-version:refname | head -n1)
-          if [ -z "$LAST_TAG" ]; then
-            echo "No previous tags found"
-            LAST_VERSION="0.0.0"
-          else
-            LAST_VERSION=${LAST_TAG#v}
-          fi
-          echo "last_version=$LAST_VERSION" >> $GITHUB_OUTPUT
-          echo "Last released version: $LAST_VERSION"
-          echo "New version: ${{ inputs.version }}"
-
-      - name: Validate version increment
-        run: |
-          LAST_VERSION="${{ steps.last_version.outputs.last_version }}"
-          NEW_VERSION="${{ inputs.version }}"
-
-          # Simple version comparison (assumes semantic versioning)
-          if [ "$LAST_VERSION" != "0.0.0" ]; then
-            if ! printf '%s\n%s\n' "$LAST_VERSION" "$NEW_VERSION" | sort -V -C; then
-              echo "Error: New version $NEW_VERSION is not greater than last version $LAST_VERSION"
-              exit 1
-            fi
-          fi
-
       - name: Check if tag already exists
         run: |
           if git tag --list | grep -q "^v${{ inputs.version }}$"; then
@@ -111,7 +83,6 @@ jobs:
           echo ""
           echo "Planned operations:"
           echo "- Version to tag: v${{ inputs.version }}"
-          echo "- Last version: v${{ steps.last_version.outputs.last_version }}"
           echo ""
           echo "Git tags that would be created:"
           echo "  - v${{ inputs.version }} (main release tag)"
@@ -175,8 +146,6 @@ jobs:
           ## What's Changed
 
           $(cat /tmp/release_content.txt)
-
-          **Full Changelog**: https://github.com/open-telemetry/otel-arrow/compare/v${{ steps.last_version.outputs.last_version }}...v${{ inputs.version }}
 
           ## Go Modules
 

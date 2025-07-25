@@ -33,17 +33,6 @@ jobs:
       - name: Validate inputs
         run: ./.github/workflows/scripts/validate-version.sh "${{ inputs.version }}"
 
-      - name: Get last released version
-        id: last_version
-        run: |
-          LAST_VERSION=$(./.github/workflows/scripts/get-last-version.sh)
-          echo "last_version=$LAST_VERSION" >> $GITHUB_OUTPUT
-          echo "Last released version: $LAST_VERSION"
-          echo "New version: ${{ inputs.version }}"
-
-      - name: Validate version increment
-        run: ./.github/workflows/scripts/validate-version-increment.sh "${{ steps.last_version.outputs.last_version }}" "${{ inputs.version }}"
-
       - name: Extract changelog content
         id: changelog
         run: |
@@ -65,7 +54,6 @@ jobs:
           echo ""
           echo "Planned changes:"
           echo "- New version: ${{ inputs.version }}"
-          echo "- Last version: ${{ steps.last_version.outputs.last_version }}"
           echo ""
           echo "Git diff:"
 
