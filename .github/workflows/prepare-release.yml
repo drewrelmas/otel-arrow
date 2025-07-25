@@ -37,11 +37,11 @@ jobs:
         id: changelog
         run: |
           # Extract changelog content and save as output
-          CHANGELOG_CONTENT=$(./.github/workflows/scripts/extract-changelog.sh /tmp/changelog_content.txt && cat /tmp/changelog_content.txt)
+          ./.github/workflows/scripts/extract-changelog.sh /tmp/changelog_content.txt
           # Use delimiter to handle multiline content
           EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
           echo "content<<$EOF" >> $GITHUB_OUTPUT
-          echo "$CHANGELOG_CONTENT" >> $GITHUB_OUTPUT
+          cat /tmp/changelog_content.txt >> $GITHUB_OUTPUT
           echo "$EOF" >> $GITHUB_OUTPUT
 
       - name: Update CHANGELOG.md
