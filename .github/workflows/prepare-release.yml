@@ -56,7 +56,7 @@ jobs:
           echo "- New version: ${{ inputs.version }}"
           echo ""
           echo "Changelog content:"
-          echo "${{ steps.changelog.outputs.content }}""
+          echo "${{ steps.changelog.outputs.content }}"
           echo ""
           echo "Git operations that would occur:"
           echo "  - Create branch: otelbot/release-v${{ inputs.version }}"
