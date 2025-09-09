@@ -166,16 +166,9 @@ pub static ATTRIBUTES_PROCESSOR_FACTORY: otap_df_engine::ProcessorFactory<OtapPd
 mod tests {
     use super::*;
     use crate::attributes_processor::common::{test_utils::*, ApplyDomain};
-    use crate::pdata::{OtapPdata, OtlpProtoBytes};
-    use otap_df_engine::message::Message;
-    use otap_df_engine::testing::{node::test_node, processor::TestRuntime};
-    use prost::Message as _;
     use serde_json::json;
 
-    use otap_df_engine::context::ControllerContext;
-    use otap_df_telemetry::registry::MetricsRegistryHandle;
     use otel_arrow_rust::proto::opentelemetry::{
-        collector::logs::v1::ExportLogsServiceRequest,
         common::v1::{AnyValue, KeyValue},
     };
 
@@ -215,67 +208,25 @@ mod tests {
             ]
         });
 
-        // Create a proper pipeline context for the test
-        let metrics_registry_handle = MetricsRegistryHandle::new();
-        let controller_ctx = ControllerContext::new(metrics_registry_handle);
-        let pipeline_ctx =
-            controller_ctx.pipeline_context_with("grp".into(), "pipeline".into(), 0, 0);
+        // Use common test execution
+        let results = run_attributes_processor_test(
+            input,
+            cfg,
+            ATTRIBUTES_PROCESSOR_URN,
+            create_attributes_processor,
+        );
 
-        // Set up processor test runtime and run one message
-        let node = test_node("attributes-processor-test");
-        let rt: TestRuntime<OtapPdata> = TestRuntime::new();
-        let mut node_config = NodeUserConfig::new_processor_config(ATTRIBUTES_PROCESSOR_URN);
-        node_config.config = cfg;
-        let proc =
-            create_attributes_processor(pipeline_ctx, node, Arc::new(node_config), rt.config())
-                .expect("create processor");
-        let phase = rt.set_processor(proc);
+        // Resource should still have key "a"
+        assert!(has_attr_key(&results.resource_attrs, "a"));
+        assert!(!has_attr_key(&results.resource_attrs, "b"));
 
-        phase
-            .run_test(|mut ctx| async move {
-                let mut bytes = Vec::new();
-                input.encode(&mut bytes).expect("encode");
-                let pdata_in: OtapPdata = OtlpProtoBytes::ExportLogsRequest(bytes).into();
-                ctx.process(Message::PData(pdata_in))
-                    .await
-                    .expect("process");
+        // Scope should still have key "a"
+        assert!(has_attr_key(&results.scope_attrs, "a"));
+        assert!(!has_attr_key(&results.scope_attrs, "b"));
 
-                // capture output
-                let out = ctx.drain_pdata().await;
-                let first = out.into_iter().next().expect("one output");
-
-                // Convert output to OTLP bytes for easy assertions
-                let otlp_bytes: OtlpProtoBytes = first.try_into().expect("convert to otlp");
-                let bytes = match otlp_bytes {
-                    OtlpProtoBytes::ExportLogsRequest(b) => b,
-                    _ => panic!("unexpected otlp variant"),
-                };
-                let decoded = ExportLogsServiceRequest::decode(bytes.as_slice()).expect("decode");
-
-                // Resource should still have key "a"
-                let res_attrs = &decoded.resource_logs[0]
-                    .resource
-                    .as_ref()
-                    .unwrap()
-                    .attributes;
-                assert!(res_attrs.iter().any(|kv| kv.key == "a"));
-                assert!(!res_attrs.iter().any(|kv| kv.key == "b"));
-
-                // Scope should still have key "a"
-                let scope_attrs = &decoded.resource_logs[0].scope_logs[0]
-                    .scope
-                    .as_ref()
-                    .unwrap()
-                    .attributes;
-                assert!(scope_attrs.iter().any(|kv| kv.key == "a"));
-                assert!(!scope_attrs.iter().any(|kv| kv.key == "b"));
-
-                // Log attrs should have renamed to "b"
-                let log_attrs = &decoded.resource_logs[0].scope_logs[0].log_records[0].attributes;
-                assert!(log_attrs.iter().any(|kv| kv.key == "b"));
-                assert!(!log_attrs.iter().any(|kv| kv.key == "a"));
-            })
-            .validate(|_| async move {});
+        // Log attrs should have renamed to "b"
+        assert!(has_attr_key(&results.log_attrs, "b"));
+        assert!(!has_attr_key(&results.log_attrs, "a"));
     }
 
     #[test]
@@ -296,67 +247,23 @@ mod tests {
             ]
         });
 
-        // Create a proper pipeline context for the test
-        let metrics_registry_handle = MetricsRegistryHandle::new();
-        let controller_ctx = ControllerContext::new(metrics_registry_handle);
-        let pipeline_ctx =
-            controller_ctx.pipeline_context_with("grp".into(), "pipeline".into(), 0, 0);
+        // Use common test execution
+        let results = run_attributes_processor_test(
+            input,
+            cfg,
+            ATTRIBUTES_PROCESSOR_URN,
+            create_attributes_processor,
+        );
 
-        let node = test_node("attributes-processor-delete-test");
-        let rt: TestRuntime<OtapPdata> = TestRuntime::new();
-        let mut node_config = NodeUserConfig::new_processor_config(ATTRIBUTES_PROCESSOR_URN);
-        node_config.config = cfg;
-        let proc =
-            create_attributes_processor(pipeline_ctx, node, Arc::new(node_config), rt.config())
-                .expect("create processor");
-        let phase = rt.set_processor(proc);
+        // Resource should still have key "a"
+        assert!(has_attr_key(&results.resource_attrs, "a"));
 
-        phase
-            .run_test(|mut ctx| async move {
-                let mut bytes = Vec::new();
-                input.encode(&mut bytes).expect("encode");
-                let pdata_in: OtapPdata = OtlpProtoBytes::ExportLogsRequest(bytes).into();
-                ctx.process(Message::PData(pdata_in))
-                    .await
-                    .expect("process");
+        // Scope should still have key "a"
+        assert!(has_attr_key(&results.scope_attrs, "a"));
 
-                let out = ctx.drain_pdata().await;
-                let first = out.into_iter().next().expect("one output");
-
-                let otlp_bytes: OtlpProtoBytes = first.try_into().expect("convert to otlp");
-                let bytes = match otlp_bytes {
-                    OtlpProtoBytes::ExportLogsRequest(b) => b,
-                    _ => panic!("unexpected otlp variant"),
-                };
-                let decoded = ExportLogsServiceRequest::decode(bytes.as_slice()).expect("decode");
-
-                // Resource should still have key "a"
-                let res_attrs = &decoded.resource_logs[0]
-                    .resource
-                    .as_ref()
-                    .unwrap()
-                    .attributes;
-                assert!(res_attrs.iter().any(|kv| kv.key == "a"));
-
-                // Scope should still have key "a"
-                let scope_attrs = &decoded.resource_logs[0].scope_logs[0]
-                    .scope
-                    .as_ref()
-                    .unwrap()
-                    .attributes;
-                assert!(scope_attrs.iter().any(|kv| kv.key == "a"));
-                // Log attrs should have deleted "a" but still contain other keys
-                let log_attrs = &decoded.resource_logs[0].scope_logs[0].log_records[0].attributes;
-                assert!(!log_attrs.iter().any(|kv| kv.key == "a"));
-                assert!(log_attrs.iter().any(|kv| {
-                    if kv.key != "b" { return false; }
-                    match kv.value.as_ref().and_then(|v| v.value.as_ref()) {
-                        Some(otel_arrow_rust::proto::opentelemetry::common::v1::any_value::Value::StringValue(s)) => s == "keep",
-                        _ => false,
-                    }
-                }));
-            })
-            .validate(|_| async move {});
+        // Log attrs should have deleted "a" but still contain other keys
+        assert!(!has_attr_key(&results.log_attrs, "a"));
+        assert!(has_attr_with_string_value(&results.log_attrs, "b", "keep"));
     }
 
     #[test]
@@ -379,58 +286,20 @@ mod tests {
             "apply_to": ["resource"]
         });
 
-        // Create a proper pipeline context for the test
-        let metrics_registry_handle = MetricsRegistryHandle::new();
-        let controller_ctx = ControllerContext::new(metrics_registry_handle);
-        let pipeline_ctx =
-            controller_ctx.pipeline_context_with("grp".into(), "pipeline".into(), 0, 0);
+        // Use common test execution
+        let results = run_attributes_processor_test(
+            input,
+            cfg,
+            ATTRIBUTES_PROCESSOR_URN,
+            create_attributes_processor,
+        );
 
-        let node = test_node("attributes-processor-delete-resource");
-        let rt: TestRuntime<OtapPdata> = TestRuntime::new();
-        let mut node_config = NodeUserConfig::new_processor_config(ATTRIBUTES_PROCESSOR_URN);
-        node_config.config = cfg;
-        let proc =
-            create_attributes_processor(pipeline_ctx, node, Arc::new(node_config), rt.config())
-                .expect("create processor");
-        let phase = rt.set_processor(proc);
-
-        phase
-            .run_test(|mut ctx| async move {
-                let mut bytes = Vec::new();
-                input.encode(&mut bytes).expect("encode");
-                let pdata_in: OtapPdata = OtlpProtoBytes::ExportLogsRequest(bytes).into();
-                ctx.process(Message::PData(pdata_in))
-                    .await
-                    .expect("process");
-
-                let out = ctx.drain_pdata().await;
-                let first = out.into_iter().next().expect("one output");
-                let otlp_bytes: OtlpProtoBytes = first.try_into().expect("convert to otlp");
-                let bytes = match otlp_bytes {
-                    OtlpProtoBytes::ExportLogsRequest(b) => b,
-                    _ => panic!("unexpected otlp variant"),
-                };
-                let decoded = ExportLogsServiceRequest::decode(bytes.as_slice()).expect("decode");
-
-                // Resource 'a' should be deleted
-                let res_attrs = &decoded.resource_logs[0]
-                    .resource
-                    .as_ref()
-                    .unwrap()
-                    .attributes;
-                assert!(!res_attrs.iter().any(|kv| kv.key == "a"));
-                // Scope 'a' should remain
-                let scope_attrs = &decoded.resource_logs[0].scope_logs[0]
-                    .scope
-                    .as_ref()
-                    .unwrap()
-                    .attributes;
-                assert!(scope_attrs.iter().any(|kv| kv.key == "a"));
-                // Log 'a' should remain
-                let log_attrs = &decoded.resource_logs[0].scope_logs[0].log_records[0].attributes;
-                assert!(log_attrs.iter().any(|kv| kv.key == "a"));
-            })
-            .validate(|_| async move {});
+        // Resource 'a' should be deleted
+        assert!(!has_attr_key(&results.resource_attrs, "a"));
+        // Scope 'a' should remain
+        assert!(has_attr_key(&results.scope_attrs, "a"));
+        // Log 'a' should remain
+        assert!(has_attr_key(&results.log_attrs, "a"));
     }
 
     #[test]
@@ -453,58 +322,20 @@ mod tests {
             "apply_to": ["scope"]
         });
 
-        // Create a proper pipeline context for the test
-        let metrics_registry_handle = MetricsRegistryHandle::new();
-        let controller_ctx = ControllerContext::new(metrics_registry_handle);
-        let pipeline_ctx =
-            controller_ctx.pipeline_context_with("grp".into(), "pipeline".into(), 0, 0);
+        // Use common test execution
+        let results = run_attributes_processor_test(
+            input,
+            cfg,
+            ATTRIBUTES_PROCESSOR_URN,
+            create_attributes_processor,
+        );
 
-        let node = test_node("attributes-processor-delete-scope");
-        let rt: TestRuntime<OtapPdata> = TestRuntime::new();
-        let mut node_config = NodeUserConfig::new_processor_config(ATTRIBUTES_PROCESSOR_URN);
-        node_config.config = cfg;
-        let proc =
-            create_attributes_processor(pipeline_ctx, node, Arc::new(node_config), rt.config())
-                .expect("create processor");
-        let phase = rt.set_processor(proc);
-
-        phase
-            .run_test(|mut ctx| async move {
-                let mut bytes = Vec::new();
-                input.encode(&mut bytes).expect("encode");
-                let pdata_in: OtapPdata = OtlpProtoBytes::ExportLogsRequest(bytes).into();
-                ctx.process(Message::PData(pdata_in))
-                    .await
-                    .expect("process");
-
-                let out = ctx.drain_pdata().await;
-                let first = out.into_iter().next().expect("one output");
-                let otlp_bytes: OtlpProtoBytes = first.try_into().expect("convert to otlp");
-                let bytes = match otlp_bytes {
-                    OtlpProtoBytes::ExportLogsRequest(b) => b,
-                    _ => panic!("unexpected otlp variant"),
-                };
-                let decoded = ExportLogsServiceRequest::decode(bytes.as_slice()).expect("decode");
-
-                // Resource 'a' should remain
-                let res_attrs = &decoded.resource_logs[0]
-                    .resource
-                    .as_ref()
-                    .unwrap()
-                    .attributes;
-                assert!(res_attrs.iter().any(|kv| kv.key == "a"));
-                // Scope 'a' should be deleted
-                let scope_attrs = &decoded.resource_logs[0].scope_logs[0]
-                    .scope
-                    .as_ref()
-                    .unwrap()
-                    .attributes;
-                assert!(!scope_attrs.iter().any(|kv| kv.key == "a"));
-                // Log 'a' should remain
-                let log_attrs = &decoded.resource_logs[0].scope_logs[0].log_records[0].attributes;
-                assert!(log_attrs.iter().any(|kv| kv.key == "a"));
-            })
-            .validate(|_| async move {});
+        // Resource 'a' should remain
+        assert!(has_attr_key(&results.resource_attrs, "a"));
+        // Scope 'a' should be deleted
+        assert!(!has_attr_key(&results.scope_attrs, "a"));
+        // Log 'a' should remain
+        assert!(has_attr_key(&results.log_attrs, "a"));
     }
 
     #[test]
@@ -531,62 +362,24 @@ mod tests {
             "apply_to": ["signal", "resource"]
         });
 
-        // Create a proper pipeline context for the test
-        let metrics_registry_handle = MetricsRegistryHandle::new();
-        let controller_ctx = ControllerContext::new(metrics_registry_handle);
-        let pipeline_ctx =
-            controller_ctx.pipeline_context_with("grp".into(), "pipeline".into(), 0, 0);
+        // Use common test execution
+        let results = run_attributes_processor_test(
+            input,
+            cfg,
+            ATTRIBUTES_PROCESSOR_URN,
+            create_attributes_processor,
+        );
 
-        let node = test_node("attributes-processor-delete-signal-and-resource");
-        let rt: TestRuntime<OtapPdata> = TestRuntime::new();
-        let mut node_config = NodeUserConfig::new_processor_config(ATTRIBUTES_PROCESSOR_URN);
-        node_config.config = cfg;
-        let proc =
-            create_attributes_processor(pipeline_ctx, node, Arc::new(node_config), rt.config())
-                .expect("create processor");
-        let phase = rt.set_processor(proc);
+        // Resource 'a' should be deleted; 'r' should remain
+        assert!(!has_attr_key(&results.resource_attrs, "a"));
+        assert!(has_attr_key(&results.resource_attrs, "r"));
 
-        phase
-            .run_test(|mut ctx| async move {
-                let mut bytes = Vec::new();
-                input.encode(&mut bytes).expect("encode");
-                let pdata_in: OtapPdata = OtlpProtoBytes::ExportLogsRequest(bytes).into();
-                ctx.process(Message::PData(pdata_in))
-                    .await
-                    .expect("process");
+        // Scope 'a' should remain
+        assert!(has_attr_key(&results.scope_attrs, "a"));
+        assert!(has_attr_key(&results.scope_attrs, "s"));
 
-                let out = ctx.drain_pdata().await;
-                let first = out.into_iter().next().expect("one output");
-                let otlp_bytes: OtlpProtoBytes = first.try_into().expect("convert to otlp");
-                let bytes = match otlp_bytes {
-                    OtlpProtoBytes::ExportLogsRequest(b) => b,
-                    _ => panic!("unexpected otlp variant"),
-                };
-                let decoded = ExportLogsServiceRequest::decode(bytes.as_slice()).expect("decode");
-
-                // Resource 'a' should be deleted; 'r' should remain
-                let res_attrs = &decoded.resource_logs[0]
-                    .resource
-                    .as_ref()
-                    .unwrap()
-                    .attributes;
-                assert!(!res_attrs.iter().any(|kv| kv.key == "a"));
-                assert!(res_attrs.iter().any(|kv| kv.key == "r"));
-
-                // Scope 'a' should remain
-                let scope_attrs = &decoded.resource_logs[0].scope_logs[0]
-                    .scope
-                    .as_ref()
-                    .unwrap()
-                    .attributes;
-                assert!(scope_attrs.iter().any(|kv| kv.key == "a"));
-                assert!(scope_attrs.iter().any(|kv| kv.key == "s"));
-
-                // Log 'a' should be deleted; 'b' should remain
-                let log_attrs = &decoded.resource_logs[0].scope_logs[0].log_records[0].attributes;
-                assert!(!log_attrs.iter().any(|kv| kv.key == "a"));
-                assert!(log_attrs.iter().any(|kv| kv.key == "b"));
-            })
-            .validate(|_| async move {});
+        // Log 'a' should be deleted; 'b' should remain
+        assert!(!has_attr_key(&results.log_attrs, "a"));
+        assert!(has_attr_key(&results.log_attrs, "b"));
     }
 }

@@ -275,7 +275,14 @@ pub mod test_utils {
     //! Shared test utilities for attributes processor tests.
     
     use super::*;
-    use otap_df_engine::context::ControllerContext;
+    use crate::pdata::{OtapPdata, OtlpProtoBytes};
+    use otap_df_config::node::NodeUserConfig;
+    use otap_df_engine::config::ProcessorConfig;
+    use otap_df_engine::context::{ControllerContext, PipelineContext};
+    use otap_df_engine::message::Message;
+    use otap_df_engine::node::NodeId;
+    use otap_df_engine::processor::ProcessorWrapper;
+    use otap_df_engine::testing::{node::test_node, processor::TestRuntime};
     use otap_df_telemetry::registry::MetricsRegistryHandle;
     use otel_arrow_rust::proto::opentelemetry::{
         collector::logs::v1::ExportLogsServiceRequest,
@@ -283,6 +290,9 @@ pub mod test_utils {
         logs::v1::{LogRecord, ResourceLogs, ScopeLogs},
         resource::v1::Resource,
     };
+    use prost::Message as ProstMessage;
+    use serde_json::Value;
+    use std::sync::Arc;
 
     /// Create a test pipeline context for processor tests.
     pub fn create_test_pipeline_context() -> PipelineContext {
@@ -317,5 +327,123 @@ pub mod test_utils {
             ])
             .finish(),
         ])
+    }
+
+    /// Result type for attribute assertions in tests.
+    #[derive(Debug)]
+    pub struct AttributeTestResults {
+        /// Resource attributes from the processed output.
+        pub resource_attrs: Vec<KeyValue>,
+        /// Scope attributes from the processed output.
+        pub scope_attrs: Vec<KeyValue>,
+        /// Log attributes from the processed output.
+        pub log_attrs: Vec<KeyValue>,
+    }
+
+    /// Common test execution pattern for attribute processors.
+    /// 
+    /// This function handles the boilerplate of:
+    /// 1. Creating a processor from config
+    /// 2. Setting up the test runtime
+    /// 3. Processing the input message
+    /// 4. Extracting and decoding the output
+    /// 5. Returning structured attribute results for assertions
+    pub fn run_attributes_processor_test<F>(
+        input: ExportLogsServiceRequest,
+        config: Value,
+        processor_urn: &'static str,
+        processor_factory: F,
+    ) -> AttributeTestResults 
+    where
+        F: FnOnce(PipelineContext, NodeId, Arc<NodeUserConfig>, &ProcessorConfig) 
+            -> Result<ProcessorWrapper<OtapPdata>, ConfigError>,
+    {
+        // Create pipeline context and test runtime
+        let pipeline_ctx = create_test_pipeline_context();
+        let node = test_node("attributes-processor-test");
+        let rt: TestRuntime<OtapPdata> = TestRuntime::new();
+        let mut node_config = NodeUserConfig::new_processor_config(processor_urn);
+        node_config.config = config;
+        
+        let proc = processor_factory(pipeline_ctx, node, Arc::new(node_config), rt.config())
+            .expect("create processor");
+        let phase = rt.set_processor(proc);
+
+        // Use Arc to share the result between closure and outer scope
+        let result = Arc::new(std::sync::Mutex::new(None));
+        let result_clone = result.clone();
+        
+        phase
+            .run_test(move |mut ctx| async move {
+                let mut bytes = Vec::new();
+                input.encode(&mut bytes).expect("encode");
+                let pdata_in: OtapPdata = OtlpProtoBytes::ExportLogsRequest(bytes).into();
+                ctx.process(Message::PData(pdata_in))
+                    .await
+                    .expect("process");
+
+                // Capture output
+                let out = ctx.drain_pdata().await;
+                let first = out.into_iter().next().expect("one output");
+
+                // Convert output to OTLP bytes for assertions
+                let otlp_bytes: OtlpProtoBytes = first.try_into().expect("convert to otlp");
+                let bytes = match otlp_bytes {
+                    OtlpProtoBytes::ExportLogsRequest(b) => b,
+                    _ => panic!("unexpected otlp variant"),
+                };
+                let decoded = ExportLogsServiceRequest::decode(bytes.as_slice()).expect("decode");
+
+                // Extract attribute data for assertions
+                let resource_attrs = decoded.resource_logs[0]
+                    .resource
+                    .as_ref()
+                    .unwrap()
+                    .attributes
+                    .clone();
+                
+                let scope_attrs = decoded.resource_logs[0].scope_logs[0]
+                    .scope
+                    .as_ref()
+                    .unwrap()
+                    .attributes
+                    .clone();
+                
+                let log_attrs = decoded.resource_logs[0].scope_logs[0].log_records[0]
+                    .attributes
+                    .clone();
+
+                let test_result = AttributeTestResults {
+                    resource_attrs,
+                    scope_attrs,
+                    log_attrs,
+                };
+                
+                *result_clone.lock().unwrap() = Some(test_result);
+            })
+            .validate(|_| async move {});
+
+        // Extract the result
+        Arc::try_unwrap(result)
+            .unwrap()
+            .into_inner()
+            .unwrap()
+            .expect("test should have produced results")
+    }
+
+    /// Helper to check if an attribute with a specific key exists in a collection.
+    pub fn has_attr_key(attrs: &[KeyValue], key: &str) -> bool {
+        attrs.iter().any(|kv| kv.key == key)
+    }
+
+    /// Helper to check if an attribute with a specific key and string value exists.
+    pub fn has_attr_with_string_value(attrs: &[KeyValue], key: &str, expected_value: &str) -> bool {
+        attrs.iter().any(|kv| {
+            if kv.key != key { return false; }
+            match kv.value.as_ref().and_then(|v| v.value.as_ref()) {
+                Some(otel_arrow_rust::proto::opentelemetry::common::v1::any_value::Value::StringValue(s)) => s == expected_value,
+                _ => false,
+            }
+        })
     }
 }
