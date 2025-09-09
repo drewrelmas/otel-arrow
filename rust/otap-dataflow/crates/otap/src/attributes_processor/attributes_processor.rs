@@ -1,10 +1,10 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-//! Attributes processor for OTAP pipelines.
+//! YAML-based attributes processor for OTAP pipelines.
 //!
-//! This processor provides attribute transformations for telemetry data. It operates
-//! on OTAP Arrow payloads (OtapArrowRecords and OtapArrowBytes) and can convert OTLP
+//! This processor provides attribute transformations for telemetry data using YAML configuration.
+//! It operates on OTAP Arrow payloads (OtapArrowRecords and OtapArrowBytes) and can convert OTLP
 //! bytes to OTAP for processing.
 //!
 //! Supported actions (current subset):
@@ -31,11 +31,14 @@
 //! Implementation uses otel_arrow_rust::otap::transform::transform_attributes for
 //! efficient batch processing of Arrow record batches.
 
+use super::common::{
+    Action, BaseAttributesProcessor, actions_to_transform, parse_apply_to,
+    create_attributes_processor_generic,
+};
 use crate::{OTAP_PROCESSOR_FACTORIES, pdata::OtapPdata};
 use async_trait::async_trait;
 use linkme::distributed_slice;
 use otap_df_config::error::Error as ConfigError;
-use otap_df_config::experimental::SignalType;
 use otap_df_config::node::NodeUserConfig;
 use otap_df_engine::config::ProcessorConfig;
 use otap_df_engine::context::PipelineContext;
@@ -44,42 +47,12 @@ use otap_df_engine::local::processor as local;
 use otap_df_engine::message::Message;
 use otap_df_engine::node::NodeId;
 use otap_df_engine::processor::ProcessorWrapper;
-use otel_arrow_rust::otap::{
-    OtapArrowRecords,
-    transform::{AttributesTransform, transform_attributes},
-};
-use otel_arrow_rust::proto::opentelemetry::arrow::v1::ArrowPayloadType;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::sync::Arc;
 
 /// URN for the AttributesProcessor
 pub const ATTRIBUTES_PROCESSOR_URN: &str = "urn:otap:processor:attributes_processor";
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-/// Actions that can be performed on attributes.
-#[serde(tag = "action", rename_all = "lowercase")]
-pub enum Action {
-    /// Rename an existing attribute key (non-standard; deviates from Go config).
-    Rename {
-        /// The source key to rename from.
-        source_key: String,
-        /// The destination key to rename to.
-        destination_key: String,
-    },
-
-    /// Delete an attribute by key.
-    Delete {
-        /// The attribute key to delete.
-        key: String,
-    },
-
-    /// Other actions are accepted for forward-compatibility but ignored.
-    /// These variants allow deserialization of Go-style configs without effect.
-    #[serde(other)]
-    Unsupported,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 /// Configuration for the AttributesProcessor.
@@ -106,10 +79,7 @@ pub struct Config {
 /// across all attribute types (resource, scope, and signal-specific attributes)
 /// for logs, metrics, and traces telemetry.
 pub struct AttributesProcessor {
-    // Pre-computed transform to avoid rebuilding per message
-    transform: AttributesTransform,
-    // Selected attribute domains to transform
-    domains: HashSet<ApplyDomain>,
+    base: BaseAttributesProcessor,
 }
 
 impl AttributesProcessor {
@@ -129,26 +99,8 @@ impl AttributesProcessor {
     /// Creates a new AttributesProcessor with the given parsed configuration.
     #[must_use]
     fn new(config: Config) -> Self {
-        let mut renames = BTreeMap::new();
-        let mut deletes = BTreeSet::new();
-
-        for action in config.actions {
-            match action {
-                Action::Delete { key } => {
-                    let _ = deletes.insert(key);
-                }
-                Action::Rename {
-                    source_key,
-                    destination_key,
-                } => {
-                    let _ = renames.insert(source_key, destination_key);
-                }
-                // Unsupported actions are ignored for now
-                Action::Unsupported => {}
-            }
-        }
-
         let domains = parse_apply_to(config.apply_to.as_ref());
+        let transform = actions_to_transform(&config.actions);
 
         // TODO: Optimize action composition into a valid AttributesTransform that
         // still reflects the user's intended semantics. Consider:
@@ -158,19 +110,7 @@ impl AttributesProcessor {
         // For now, we compose a single transform and let transform_attributes
         // enforce validity (which may error for conflicting maps).
         Self {
-            transform: AttributesTransform {
-                rename: if renames.is_empty() {
-                    None
-                } else {
-                    Some(renames)
-                },
-                delete: if deletes.is_empty() {
-                    None
-                } else {
-                    Some(deletes)
-                },
-            },
-            domains,
+            base: BaseAttributesProcessor::new(transform, domains),
         }
     }
 }
@@ -182,129 +122,7 @@ impl local::Processor<OtapPdata> for AttributesProcessor {
         msg: Message<OtapPdata>,
         effect_handler: &mut local::EffectHandler<OtapPdata>,
     ) -> Result<(), EngineError> {
-        match msg {
-            Message::Control(_) => Ok(()),
-            Message::PData(pdata) => {
-                // Fast path: no actions to apply
-                if self.transform.rename.is_none() && self.transform.delete.is_none() {
-                    return effect_handler
-                        .send_message(pdata)
-                        .await
-                        .map_err(|e| e.into());
-                }
-
-                let signal = pdata.signal_type();
-                let mut records: OtapArrowRecords = pdata.try_into()?;
-
-                // Apply transform across selected domains
-                apply_transform(&mut records, signal, &self.transform, &self.domains)?;
-
-                effect_handler
-                    .send_message(records.into())
-                    .await
-                    .map_err(|e| e.into())
-            }
-        }
-    }
-}
-
-#[allow(clippy::result_large_err)]
-fn apply_transform(
-    records: &mut OtapArrowRecords,
-    signal: SignalType,
-    transform: &AttributesTransform,
-    domains: &HashSet<ApplyDomain>,
-) -> Result<(), EngineError> {
-    let payloads = attrs_payloads(signal, domains);
-
-    // Only apply if we have transforms to apply
-    if transform.rename.is_some() || transform.delete.is_some() {
-        for payload_ty in payloads {
-            if let Some(rb) = records.get(payload_ty).cloned() {
-                let rb = transform_attributes(&rb, transform)
-                    .map_err(|e| engine_err(&format!("transform_attributes failed: {e}")))?;
-                records.set(payload_ty, rb);
-            }
-        }
-    }
-
-    Ok(())
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-enum ApplyDomain {
-    Signal,
-    Resource,
-    Scope,
-}
-
-fn parse_apply_to(apply_to: Option<&Vec<String>>) -> HashSet<ApplyDomain> {
-    let mut set = HashSet::new();
-    match apply_to {
-        None => {
-            let _ = set.insert(ApplyDomain::Signal);
-        }
-        Some(list) => {
-            for item in list {
-                match item.as_str() {
-                    "signal" => {
-                        let _ = set.insert(ApplyDomain::Signal);
-                    }
-                    "resource" => {
-                        let _ = set.insert(ApplyDomain::Resource);
-                    }
-                    "scope" => {
-                        let _ = set.insert(ApplyDomain::Scope);
-                    }
-                    _ => {
-                        // Unknown entry: ignore for now; could return config error in future
-                    }
-                }
-            }
-            if set.is_empty() {
-                let _ = set.insert(ApplyDomain::Signal);
-            }
-        }
-    }
-    set
-}
-
-fn attrs_payloads(signal: SignalType, domains: &HashSet<ApplyDomain>) -> Vec<ArrowPayloadType> {
-    use ArrowPayloadType as A;
-    let mut out: Vec<ArrowPayloadType> = Vec::new();
-    // Domains are unioned
-    if domains.contains(&ApplyDomain::Resource) {
-        out.push(A::ResourceAttrs);
-    }
-    if domains.contains(&ApplyDomain::Scope) {
-        out.push(A::ScopeAttrs);
-    }
-    if domains.contains(&ApplyDomain::Signal) {
-        match signal {
-            SignalType::Logs => {
-                out.push(A::LogAttrs);
-            }
-            SignalType::Metrics => {
-                out.push(A::MetricAttrs);
-                out.push(A::NumberDpAttrs);
-                out.push(A::HistogramDpAttrs);
-                out.push(A::SummaryDpAttrs);
-                out.push(A::NumberDpExemplarAttrs);
-                out.push(A::HistogramDpExemplarAttrs);
-            }
-            SignalType::Traces => {
-                out.push(A::SpanAttrs);
-                out.push(A::SpanEventAttrs);
-                out.push(A::SpanLinkAttrs);
-            }
-        }
-    }
-    out
-}
-
-fn engine_err(msg: &str) -> EngineError {
-    EngineError::PdataConversionError {
-        error: msg.to_string(),
+        self.base.process(msg, effect_handler).await
     }
 }
 
@@ -313,17 +131,21 @@ fn engine_err(msg: &str) -> EngineError {
 /// Accepts configuration in OpenTelemetry Collector attributes processor format.
 /// See the module documentation for configuration examples and supported operations.
 pub fn create_attributes_processor(
-    _pipeline_ctx: PipelineContext,
+    pipeline_ctx: PipelineContext,
     node: NodeId,
     node_config: Arc<NodeUserConfig>,
     processor_config: &ProcessorConfig,
 ) -> Result<ProcessorWrapper<OtapPdata>, ConfigError> {
-    Ok(ProcessorWrapper::local(
-        AttributesProcessor::from_config(&node_config.config)?,
+    create_attributes_processor_generic(
+        pipeline_ctx,
         node,
         node_config,
         processor_config,
-    ))
+        |config| {
+            let processor = AttributesProcessor::from_config(config)?;
+            Ok(processor.base)
+        },
+    )
 }
 
 /// Register AttributesProcessor as an OTAP processor factory
@@ -343,6 +165,7 @@ pub static ATTRIBUTES_PROCESSOR_FACTORY: otap_df_engine::ProcessorFactory<OtapPd
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::attributes_processor::common::{test_utils::*, ApplyDomain};
     use crate::pdata::{OtapPdata, OtlpProtoBytes};
     use otap_df_engine::message::Message;
     use otap_df_engine::testing::{node::test_node, processor::TestRuntime};
@@ -353,36 +176,8 @@ mod tests {
     use otap_df_telemetry::registry::MetricsRegistryHandle;
     use otel_arrow_rust::proto::opentelemetry::{
         collector::logs::v1::ExportLogsServiceRequest,
-        common::v1::{AnyValue, InstrumentationScope, KeyValue},
-        logs::v1::{LogRecord, ResourceLogs, ScopeLogs, SeverityNumber},
-        resource::v1::Resource,
+        common::v1::{AnyValue, KeyValue},
     };
-
-    fn build_logs_with_attrs(
-        res_attrs: Vec<KeyValue>,
-        scope_attrs: Vec<KeyValue>,
-        log_attrs: Vec<KeyValue>,
-    ) -> ExportLogsServiceRequest {
-        ExportLogsServiceRequest::new(vec![
-            ResourceLogs::build(Resource {
-                attributes: res_attrs,
-                ..Default::default()
-            })
-            .scope_logs(vec![
-                ScopeLogs::build(InstrumentationScope {
-                    attributes: scope_attrs,
-                    ..Default::default()
-                })
-                .log_records(vec![
-                    LogRecord::build(1u64, SeverityNumber::Info, "")
-                        .attributes(log_attrs)
-                        .finish(),
-                ])
-                .finish(),
-            ])
-            .finish(),
-        ])
-    }
 
     #[test]
     fn test_config_from_json_parses_actions_and_apply_to_default() {
@@ -393,13 +188,13 @@ mod tests {
             ]
         });
         let parsed = AttributesProcessor::from_config(&cfg).expect("config parse");
-        assert!(parsed.transform.rename.is_some());
-        assert!(parsed.transform.delete.is_some());
+        assert!(parsed.base.transform.rename.is_some());
+        assert!(parsed.base.transform.delete.is_some());
         // default apply_to should include Signal
-        assert!(parsed.domains.contains(&ApplyDomain::Signal));
+        assert!(parsed.base.domains.contains(&ApplyDomain::Signal));
         // and not necessarily Resource/Scope unless specified
-        assert!(!parsed.domains.contains(&ApplyDomain::Resource));
-        assert!(!parsed.domains.contains(&ApplyDomain::Scope));
+        assert!(!parsed.base.domains.contains(&ApplyDomain::Resource));
+        assert!(!parsed.base.domains.contains(&ApplyDomain::Scope));
     }
 
     #[test]

@@ -1,0 +1,26 @@
+# Example configuration showing both YAML and KQL attributes processors
+
+# YAML-based attributes processor
+yaml_processor:
+  name: "yaml_attributes"
+  type: "com.arrow.otel.processors.attributes"
+  config:
+    actions:
+      - action: "delete"
+        key: "sensitive_data"
+      - action: "rename"
+        source_key: "old_name"
+        destination_key: "new_name"
+    apply_to:
+      - "signal"
+      - "resource"
+
+# KQL-based attributes processor  
+kql_processor:
+  name: "kql_attributes"
+  type: "com.arrow.otel.processors.kql_attributes"
+  config:
+    kql: "logs | project-away sensitive_data | extend new_name = old_name"
+    apply_to:
+      - "signal"
+      - "resource"
