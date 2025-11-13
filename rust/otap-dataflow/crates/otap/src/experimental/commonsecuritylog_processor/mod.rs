@@ -20,6 +20,11 @@ use otap_df_engine::message::Message;
 use otap_df_engine::node::NodeId;
 use otap_df_engine::processor::ProcessorWrapper;
 use otap_df_pdata::OtapArrowRecords;
+use otap_df_pdata::otap::transform::{
+    AttributesTransform, RenameTransform, transform_attributes_with_stats,
+};
+use otap_df_pdata::proto::opentelemetry::arrow::v1::ArrowPayloadType;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use crate::OTAP_PROCESSOR_FACTORIES;
@@ -34,6 +39,12 @@ pub struct Config {}
 
 /// Processor that transforms incoming log data into CommonSecurityLog format
 pub struct CommonSecurityLogProcessor {}
+
+fn engine_err(msg: &str) -> Error {
+    Error::PdataConversionError {
+        error: msg.to_string(),
+    }
+}
 
 /// Factory function to create a CommonSecurityLog processor
 pub fn create_commonsecuritylog_processor(
@@ -74,6 +85,31 @@ impl CommonSecurityLogProcessor {
     pub fn from_config() -> Result<Self, ConfigError> {
         Ok(CommonSecurityLogProcessor {})
     }
+
+    fn transform_to_commonsecuritylog(&self, records: &mut OtapArrowRecords) -> Result<u64, Error> {
+        let mut renamed_total: u64 = 0;
+
+        // Perform all well-known renames
+        let transform = &AttributesTransform {
+            // TODO: Include all required renames
+            // Only one included here as an example
+            rename: Some(RenameTransform::new(BTreeMap::from_iter([(
+                "act".into(),
+                "DeviceAction".into(),
+            )]))),
+            delete: None,
+        };
+        if let Some(rb) = records.get(ArrowPayloadType::LogAttrs) {
+            let (rb, stats) = transform_attributes_with_stats(rb, &transform)
+                .map_err(|e| engine_err(&format!("transform_attributes failed: {e}")))?;
+            renamed_total += stats.renamed_entries;
+            records.set(ArrowPayloadType::LogAttrs, rb);
+        }
+
+        // TODO: Additional concat of non-standard fields into AdditionalExtensions attribute
+
+        Ok(renamed_total)
+    }
 }
 
 #[async_trait(?Send)]
@@ -89,14 +125,16 @@ impl local::Processor<OtapPdata> for CommonSecurityLogProcessor {
                 let signal = pdata.signal_type();
                 let (context, payload) = pdata.into_parts();
 
-                let arrow_records: OtapArrowRecords = payload.try_into()?;
+                let mut records: OtapArrowRecords = payload.try_into()?;
 
                 let commonsecuritylog_records: OtapArrowRecords =
                     match signal {
                         SignalType::Logs => {
-                            // Transform log records to CommonSecurityLog format
-                            // Placeholder: return the records unchanged
-                            arrow_records
+                            match self.transform_to_commonsecuritylog(&mut records) {
+                                // TODO: Use stats
+                                Ok(_renamed) => records,
+                                Err(e) => return Err(e),
+                            }
                         }
                         _ => return Err(Error::ProcessorError {
                             processor: effect_handler.processor_id(),
@@ -210,8 +248,8 @@ mod tests {
                 let expected_log_attrs = vec![
                     KeyValue::new("DeviceAction", AnyValue::new_string("DeviceActionValue")),
                     KeyValue::new(
-                        "AdditionalExtensions",
-                        AnyValue::new_string("extraextension=ExtraExtensionValue"),
+                        "extraextension",
+                        AnyValue::new_string("ExtraExtensionValue"),
                     ),
                 ];
 
