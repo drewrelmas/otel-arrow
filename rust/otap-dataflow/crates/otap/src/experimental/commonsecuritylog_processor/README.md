@@ -18,8 +18,8 @@ While the majority of the conversion from `syslog_cef_receiver` output to
 keys](https://learn.microsoft.com/en-us/azure/sentinel/cef-name-mapping) there
 are a few exceptions that require more complex computation. For example:
 
-| Column | Source |
-|--------|--------|
+| Column | Computed Value |
+|--------|----------------|
 | `AdditionalExtensions` | String concatenation of all non-well-known Extension key/values into a single value. |
 | `RemoteIP` / `SourceIP` / `RemotePort` / `SourcePort` | Computed based on `CommunicationDirection` value |
 | `SimplifiedDeviceAction` | Computed based on `DeviceAction` value |
