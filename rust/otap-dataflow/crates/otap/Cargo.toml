@@ -71,6 +71,9 @@ experimental-exporters = []
 # Experimental exporters
 geneva-exporter = ["experimental-exporters", "dep:geneva-uploader", "dep:opentelemetry-proto"]
 
+experimental-processors = []
+commonsecuritylog-processor = ["experimental-processors"]
+
 [dev-dependencies]
 flume = { workspace = true }
 portpicker.workspace = true

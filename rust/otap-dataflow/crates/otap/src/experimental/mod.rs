@@ -10,3 +10,7 @@
 /// Geneva exporter for Microsoft telemetry backend
 #[cfg(feature = "geneva-exporter")]
 pub mod geneva_exporter;
+
+/// CommonSecurityLog processor for Microsoft Log Analytics
+#[cfg(feature = "commonsecuritylog-processor")]
+pub mod commonsecuritylog_processor;
