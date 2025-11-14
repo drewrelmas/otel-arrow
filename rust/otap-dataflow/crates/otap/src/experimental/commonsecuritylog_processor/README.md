@@ -21,12 +21,12 @@ are a few exceptions that require more complex computation. For example:
 | Column | Computed Value |
 |--------|----------------|
 | `AdditionalExtensions` | String concatenation of all non-well-known Extension key/values into a single value. |
-| `RemoteIP` / `SourceIP` / `RemotePort` / `SourcePort` | Computed based on `CommunicationDirection` value |
+| `RemoteIP` / `RemotePort` | Computed based on `CommunicationDirection` value |
 | `SimplifiedDeviceAction` | Computed based on `DeviceAction` value |
 
 Therefore, this processor is implemented separately from
 [attributes_processor](../../attributes_processor.rs), while still re-using
-internal implementation as it makes sense.
+the [transform.rs](../../../../pdata/src/otap/transform.rs) internal implementation as it makes sense.
 
 It is possible that a more general purpose transform engine (like that under
 development at
