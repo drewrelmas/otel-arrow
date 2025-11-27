@@ -51,7 +51,7 @@ pub(crate) fn parse_source_assignment_expression(
         // String("constant1") = [expression] we need to treat the accessor in
         // this case as an assignment on the source
         // Source(MapKey("some_constant1")) = [expression].
-        Rule::accessor_expression => parse_accessor_expression(destination_rule, scope, false)?,
+        Rule::accessor_expression => parse_accessor_expression(destination_rule, scope, false, true)?,
         _ => panic!("Unexpected rule in assignment_expression: {destination_rule}"),
     };
 

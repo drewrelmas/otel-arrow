@@ -17,6 +17,19 @@ use crate::{
     shared_expressions::parse_source_assignment_expression,
 };
 
+/// Helper function to extract a simple key name from a ValueAccessor
+fn extract_key_name_from_accessor(accessor: &ValueAccessor, scope: &dyn ParserScope) -> Option<Box<str>> {
+    let first_selector = accessor.get_selectors().first()?;
+    let mut first_selector_clone = first_selector.clone();
+    let pipeline = scope.get_pipeline();
+    let resolved = first_selector_clone.try_resolve_static(&pipeline.get_resolution_scope()).ok()??;
+    if let Value::String(s) = resolved.to_value() {
+        Some(s.get_value().into())
+    } else {
+        None
+    }
+}
+
 pub(crate) fn parse_extend_expression(
     extend_expression_rule: Pair<Rule>,
     scope: &dyn ParserScope,
@@ -30,6 +43,45 @@ pub(crate) fn parse_extend_expression(
             Rule::assignment_expression => {
                 let (query_location, source, destination) =
                     parse_source_assignment_expression(rule, scope)?;
+
+                // Try to add the new key to the source schema if allow_new_keys is enabled
+                let should_add_key = if let Some(schema) = scope.get_source_schema() {
+                    schema.get_allow_new_keys()
+                } else {
+                    false
+                };
+                
+                if should_add_key {
+                    // Extract the first selector as the key name
+                    if let Some(first_selector) = destination.get_value_accessor().get_selectors().first() {
+                        let mut first_selector_clone = first_selector.clone();
+                        if let Ok(Some(resolved)) = first_selector_clone.try_resolve_static(&scope.get_pipeline().get_resolution_scope()) {
+                            if let Value::String(s) = resolved.to_value() {
+                                let key_name = s.get_value();
+                                // Try to resolve the type of the source expression
+                                let mut source_copy = source.clone();
+                                let value_type = scope.try_resolve_value_type(&mut source_copy).ok().flatten();
+                                
+                                // Add the key with appropriate schema
+                                let key_schema = match value_type {
+                                    Some(ValueType::Array) => ParserMapKeySchema::Array,
+                                    Some(ValueType::Boolean) => ParserMapKeySchema::Boolean,
+                                    Some(ValueType::DateTime) => ParserMapKeySchema::DateTime,
+                                    Some(ValueType::Double) => ParserMapKeySchema::Double,
+                                    Some(ValueType::Integer) => ParserMapKeySchema::Integer,
+                                    Some(ValueType::Map) => ParserMapKeySchema::Map(None),
+                                    Some(ValueType::Regex) => ParserMapKeySchema::Regex,
+                                    Some(ValueType::String) => ParserMapKeySchema::String,
+                                    Some(ValueType::TimeSpan) => ParserMapKeySchema::TimeSpan,
+                                    Some(ValueType::Null) | None => ParserMapKeySchema::Any,
+                                };
+                                
+                                // Ignore errors - if we can't add the key, it's already there
+                                let _ = scope.add_source_key(key_name, key_schema);
+                            }
+                        }
+                    }
+                }
 
                 set_expressions.push(TransformExpression::Set(SetTransformExpression::new(
                     query_location,
@@ -71,6 +123,45 @@ pub(crate) fn parse_project_expression(
                     &mut reduction,
                 )?;
 
+                // Try to add the new key to the source schema if allow_new_keys is enabled
+                let should_add_key = if let Some(schema) = scope.get_source_schema() {
+                    schema.get_allow_new_keys()
+                } else {
+                    false
+                };
+                
+                if should_add_key {
+                    // Extract the first selector as the key name
+                    if let Some(first_selector) = destination.get_value_accessor().get_selectors().first() {
+                        let mut first_selector_clone = first_selector.clone();
+                        if let Ok(Some(resolved)) = first_selector_clone.try_resolve_static(&scope.get_pipeline().get_resolution_scope()) {
+                            if let Value::String(s) = resolved.to_value() {
+                                let key_name = s.get_value();
+                                // Try to resolve the type of the source expression
+                                let mut source_copy = source.clone();
+                                let value_type = scope.try_resolve_value_type(&mut source_copy).ok().flatten();
+                                
+                                // Add the key with appropriate schema
+                                let key_schema = match value_type {
+                                    Some(ValueType::Array) => ParserMapKeySchema::Array,
+                                    Some(ValueType::Boolean) => ParserMapKeySchema::Boolean,
+                                    Some(ValueType::DateTime) => ParserMapKeySchema::DateTime,
+                                    Some(ValueType::Double) => ParserMapKeySchema::Double,
+                                    Some(ValueType::Integer) => ParserMapKeySchema::Integer,
+                                    Some(ValueType::Map) => ParserMapKeySchema::Map(None),
+                                    Some(ValueType::Regex) => ParserMapKeySchema::Regex,
+                                    Some(ValueType::String) => ParserMapKeySchema::String,
+                                    Some(ValueType::TimeSpan) => ParserMapKeySchema::TimeSpan,
+                                    Some(ValueType::Null) | None => ParserMapKeySchema::Any,
+                                };
+                                
+                                // Ignore errors - if we can't add the key, it's already there
+                                let _ = scope.add_source_key(key_name, key_schema);
+                            }
+                        }
+                    }
+                }
+
                 expressions.push(TransformExpression::Set(SetTransformExpression::new(
                     query_location,
                     source,
@@ -78,7 +169,7 @@ pub(crate) fn parse_project_expression(
                 )));
             }
             Rule::accessor_expression => {
-                let accessor_expression = parse_accessor_expression(rule, scope, true)?;
+                let accessor_expression = parse_accessor_expression(rule, scope, true, false)?;
 
                 if let ScalarExpression::Source(s) = &accessor_expression {
                     process_map_selection_source_scalar_expression(
@@ -153,7 +244,7 @@ pub(crate) fn parse_project_keep_expression(
                 }
             }
             Rule::accessor_expression => {
-                let accessor_expression = parse_accessor_expression(rule, scope, true)?;
+                let accessor_expression = parse_accessor_expression(rule, scope, true, false)?;
 
                 if let ScalarExpression::Source(s) = &accessor_expression {
                     process_map_selection_source_scalar_expression(
@@ -182,8 +273,26 @@ pub(crate) fn parse_project_keep_expression(
         &mut expressions,
         &query_location,
         true,
-        reduction,
+        reduction.clone(),
     )?;
+
+    // Mutate schema: remove keys not in the keep list
+    if let Some(schema) = scope.get_source_schema() {
+        let kept_keys: HashSet<Box<str>> = reduction.keys.iter()
+            .map(|k| k.get_value().into())
+            .collect();
+        
+        // Get all current keys
+        let all_keys: Vec<Box<str>> = schema.get_schema().keys().cloned().collect();
+        
+        // Remove keys not in the keep list
+        drop(schema); // Release the borrow
+        for key in all_keys {
+            if !kept_keys.contains(&key) {
+                scope.remove_source_key(&key);
+            }
+        }
+    }
 
     Ok(expressions)
 }
@@ -228,7 +337,7 @@ pub(crate) fn parse_project_away_expression(
                 }
             }
             Rule::accessor_expression => {
-                let accessor_expression = parse_accessor_expression(rule, scope, true)?;
+                let accessor_expression = parse_accessor_expression(rule, scope, true, false)?;
 
                 if let ScalarExpression::Source(s) = &accessor_expression {
                     process_map_selection_source_scalar_expression(
@@ -257,8 +366,15 @@ pub(crate) fn parse_project_away_expression(
         &mut expressions,
         &query_location,
         false,
-        reduction,
+        reduction.clone(),
     )?;
+
+    // Mutate schema: remove the specified keys
+    if scope.get_source_schema().is_some() {
+        for key in &reduction.keys {
+            scope.remove_source_key(key.get_value());
+        }
+    }
 
     Ok(expressions)
 }
@@ -296,6 +412,16 @@ pub(crate) fn parse_project_rename_expression(
     if expressions.len() == 1 {
         let (location, source, destination) = expressions.drain(..).next().unwrap();
 
+        // Mutate schema: rename the key
+        if scope.get_source_schema().is_some() {
+            // Extract key names from accessors
+            if let Some(old_key) = extract_key_name_from_accessor(source.get_value_accessor(), scope) {
+                if let Some(new_key) = extract_key_name_from_accessor(destination.get_value_accessor(), scope) {
+                    scope.rename_source_key(&old_key, &new_key);
+                }
+            }
+        }
+
         Ok(TransformExpression::Move(MoveTransformExpression::new(
             location,
             MutableValueExpression::Source(source),
@@ -304,11 +430,27 @@ pub(crate) fn parse_project_rename_expression(
     } else {
         let mut keys = Vec::with_capacity(expressions.len());
 
+        // Collect the rename pairs for schema mutation
+        let rename_pairs: Vec<_> = expressions.iter()
+            .filter_map(|(_, src, dst)| {
+                let old_key = extract_key_name_from_accessor(src.get_value_accessor(), scope)?;
+                let new_key = extract_key_name_from_accessor(dst.get_value_accessor(), scope)?;
+                Some((old_key, new_key))
+            })
+            .collect();
+
         for (_, source, destination) in expressions.drain(..) {
             keys.push(MapKeyRenameSelector::new(
                 source.get_value_accessor().clone(),
                 destination.get_value_accessor().clone(),
             ));
+        }
+
+        // Mutate schema: rename all the keys
+        if scope.get_source_schema().is_some() {
+            for (old_name, new_name) in rename_pairs {
+                scope.rename_source_key(&old_name, &new_name);
+            }
         }
 
         Ok(TransformExpression::RenameMapKeys(
@@ -449,6 +591,60 @@ pub(crate) fn parse_summarize_expression(
                 }
             }
             _ => {
+                // Try to add the new keys to the summary schema BEFORE parsing post-expressions
+                // so they're available in the new scope
+                let should_add_key = if let Some(schema) = scope.get_summary_schema() {
+                    schema.get_allow_new_keys()
+                } else {
+                    false
+                };
+                
+                if should_add_key {
+                    // Add group-by keys to summary schema
+                    for (key_name, scalar_expr) in &group_by_expressions {
+                        let mut scalar_copy = scalar_expr.clone();
+                        let value_type = scope.try_resolve_value_type(&mut scalar_copy).ok().flatten();
+                        
+                        let key_schema = match value_type {
+                            Some(ValueType::Array) => ParserMapKeySchema::Array,
+                            Some(ValueType::Boolean) => ParserMapKeySchema::Boolean,
+                            Some(ValueType::DateTime) => ParserMapKeySchema::DateTime,
+                            Some(ValueType::Double) => ParserMapKeySchema::Double,
+                            Some(ValueType::Integer) => ParserMapKeySchema::Integer,
+                            Some(ValueType::Map) => ParserMapKeySchema::Map(None),
+                            Some(ValueType::Regex) => ParserMapKeySchema::Regex,
+                            Some(ValueType::String) => ParserMapKeySchema::String,
+                            Some(ValueType::TimeSpan) => ParserMapKeySchema::TimeSpan,
+                            Some(ValueType::Null) | None => ParserMapKeySchema::Any,
+                        };
+                        
+                        let _ = scope.add_summary_key(key_name, key_schema);
+                    }
+                    
+                    // Add aggregation keys to summary schema
+                    for (key_name, agg_expr) in &aggregation_expressions {
+                        let key_schema = match agg_expr.get_aggregation_function() {
+                            AggregationFunction::Count => ParserMapKeySchema::Integer,
+                            AggregationFunction::Sum | AggregationFunction::Average 
+                            | AggregationFunction::Minimum | AggregationFunction::Maximum => {
+                                // Try to infer from the argument if available
+                                if let Some(arg) = agg_expr.get_value_expression() {
+                                    let mut arg_copy = arg.clone();
+                                    match scope.try_resolve_value_type(&mut arg_copy).ok().flatten() {
+                                        Some(ValueType::Integer) => ParserMapKeySchema::Integer,
+                                        Some(ValueType::Double) => ParserMapKeySchema::Double,
+                                        _ => ParserMapKeySchema::Any,
+                                    }
+                                } else {
+                                    ParserMapKeySchema::Any
+                                }
+                            },
+                        };
+                        
+                        let _ = scope.add_summary_key(key_name, key_schema);
+                    }
+                }
+                
                 let mut options = ParserOptions::new();
 
                 if let Some(s) = scope.get_summary_schema() {
@@ -696,7 +892,8 @@ pub(crate) fn validate_summary_identifier(
             } else {
                 Ok(full_identifier)
             }
-        } else if schema.get_allow_undefined_keys() {
+        } else if schema.get_allow_undefined_keys() || schema.get_allow_new_keys() {
+            // Allow new identifiers if allow_undefined_keys or allow_new_keys is enabled
             Ok(full_identifier)
         } else {
             Err(ParserError::QueryLanguageDiagnostic {
@@ -782,6 +979,7 @@ where
     }
 }
 
+#[derive(Clone)]
 struct MapReductionState {
     pub keys: Vec<StringScalarExpression>,
     pub patterns: Vec<RegexScalarExpression>,
@@ -907,7 +1105,7 @@ fn push_map_transformation_expression(
                 if !schema.get_allow_undefined_keys() {
                     // Note: If we have schema we can apply the regex patterns ahead
                     // of time.
-                    foreach_source_schema_key(schema, |k| {
+                    foreach_source_schema_key(&*schema, |k| {
                         for p in &reduction.patterns {
                             if p.get_value().is_match(k) {
                                 if let Some((default_source_map_key, _)) = default_source_map
@@ -1054,9 +1252,9 @@ fn push_map_transformation_expression(
 #[cfg(test)]
 mod tests {
     use chrono::TimeDelta;
-    use pest::Parser;
+    use pest::Parser as PestParser;
 
-    use crate::KqlPestParser;
+    use crate::{KqlParser, KqlPestParser};
 
     use super::*;
 
@@ -4086,4 +4284,338 @@ mod tests {
             ],
         );
     }
+
+    #[test]
+    fn test_extend_with_allow_new_keys_and_restrict_reads() {
+        // Test that extend can add new keys and they become available in subsequent operations
+        let schema = ParserMapSchema::new()
+            .with_key_definition("existing_field", ParserMapKeySchema::String)
+            .set_allow_new_keys(true)
+            .set_restrict_reads_to_schema(true);
+
+        // Should parse successfully - new_field is added by extend, then used in where
+        let (result, source_schema, _) = KqlParser::parse_for_schema(
+            "source | extend new_field = 123 | where new_field > 100",
+            ParserOptions::new().with_source_map_schema(schema),
+        );
+        assert!(result.is_ok(), "Expected query to parse successfully");
+        
+        // Verify the schema was mutated to include the new field
+        let schema = source_schema.expect("Expected source schema to be present");
+        assert!(schema.get_schema_for_key("existing_field").is_some(), "Expected existing_field in schema");
+        assert!(schema.get_schema_for_key("new_field").is_some(), "Expected new_field to be added to schema");
+    }
+
+    #[test]
+    fn test_extend_restrict_reads_prevents_unknown_keys() {
+        // Test that restrict_reads_to_schema prevents reading from keys not added via extend
+        let schema = ParserMapSchema::new()
+            .with_key_definition("existing_field", ParserMapKeySchema::String)
+            .set_allow_new_keys(true)
+            .set_restrict_reads_to_schema(true);
+
+        // Should fail - unknown_field was never added
+        let (result, source_schema, _) = KqlParser::parse_for_schema(
+            "source | extend new_field = 123 | where unknown_field > 100",
+            ParserOptions::new().with_source_map_schema(schema),
+        );
+        assert!(result.is_err(), "Expected query to fail");
+        
+        if let Err(errors) = result {
+            assert!(errors.iter().any(|e| matches!(e, ParserError::QueryLanguageDiagnostic { 
+                diagnostic_id: "KS142", .. 
+            })));
+        }
+        
+        // Verify new_field was added to schema even though query failed
+        let schema = source_schema.expect("Expected source schema to be present");
+        assert!(schema.get_schema_for_key("new_field").is_some(), "Expected new_field to be added to schema");
+        assert!(schema.get_schema_for_key("unknown_field").is_none(), "Expected unknown_field NOT to be in schema");
+    }
+
+    #[test]
+    fn test_extend_without_allow_new_keys() {
+        // Test that without allow_new_keys, new fields cannot be added
+        let schema = ParserMapSchema::new()
+            .with_key_definition("existing_field", ParserMapKeySchema::String);
+
+        // Should fail - allow_new_keys is false
+        let (result, source_schema, _) = KqlParser::parse_for_schema(
+            "source | extend new_field = 123",
+            ParserOptions::new().with_source_map_schema(schema),
+        );
+        assert!(result.is_err(), "Expected query to fail without allow_new_keys");
+        
+        // Verify schema was not mutated
+        let schema = source_schema.expect("Expected source schema to be present");
+        assert!(schema.get_schema_for_key("existing_field").is_some(), "Expected existing_field in schema");
+        assert!(schema.get_schema_for_key("new_field").is_none(), "Expected new_field NOT to be added when allow_new_keys is false");
+    }
+
+    #[test]
+    fn test_project_with_allow_new_keys() {
+        // Test that project can add new computed fields when allow_new_keys is true
+        let schema = ParserMapSchema::new()
+            .with_key_definition("existing_field", ParserMapKeySchema::String)
+            .set_allow_new_keys(true)
+            .set_restrict_reads_to_schema(true);
+
+        // Should parse successfully - computed_field is added by project
+        let (result, source_schema, _) = KqlParser::parse_for_schema(
+            "source | project existing_field, computed_field = 456 | where computed_field > 100",
+            ParserOptions::new().with_source_map_schema(schema),
+        );
+        assert!(result.is_ok(), "Expected project with new field to parse successfully");
+        
+        // Verify computed_field was added to schema
+        let schema = source_schema.expect("Expected source schema to be present");
+        assert!(schema.get_schema_for_key("existing_field").is_some(), "Expected existing_field in schema");
+        assert!(schema.get_schema_for_key("computed_field").is_some(), "Expected computed_field to be added to schema");
+        assert_eq!(schema.get_schema_for_key("computed_field"), Some(&ParserMapKeySchema::Integer));
+    }
+
+    #[test]
+    fn test_summarize_with_allow_new_keys() {
+        // Test that summarize adds aggregation and group-by keys to summary schema
+        let source_schema = ParserMapSchema::new()
+            .with_key_definition("category", ParserMapKeySchema::String)
+            .with_key_definition("value", ParserMapKeySchema::Integer);
+
+        let summary_schema = ParserMapSchema::new()
+            .set_allow_new_keys(true)
+            .set_restrict_reads_to_schema(true);
+
+        // Should parse successfully - total and category are added to summary schema
+        let (result, _, summary_schema) = KqlParser::parse_for_schema(
+            "source | summarize total = sum(value) by category | where total > 100",
+            ParserOptions::new()
+                .with_source_map_schema(source_schema)
+                .with_summary_map_schema(summary_schema),
+        );
+        assert!(result.is_ok(), "Expected summarize with new keys to parse successfully");
+        
+        // Verify summary schema has both aggregation and group-by keys
+        let schema = summary_schema.expect("Expected summary schema to be present");
+        assert!(schema.get_schema_for_key("total").is_some(), "Expected total to be added to summary schema");
+        assert!(schema.get_schema_for_key("category").is_some(), "Expected category to be added to summary schema");
+        assert_eq!(schema.get_schema_for_key("total"), Some(&ParserMapKeySchema::Integer));
+        assert_eq!(schema.get_schema_for_key("category"), Some(&ParserMapKeySchema::String));
+    }
+
+    #[test]
+    fn test_summarize_restrict_reads_prevents_unknown_keys() {
+        // Test that summarize with restrict_reads prevents accessing undefined keys
+        let source_schema = ParserMapSchema::new()
+            .with_key_definition("category", ParserMapKeySchema::String)
+            .with_key_definition("value", ParserMapKeySchema::Integer);
+
+        let summary_schema = ParserMapSchema::new()
+            .set_allow_new_keys(true)
+            .set_restrict_reads_to_schema(true);
+
+        // Should fail - unknown_field is not in summary schema
+        let (result, _, summary_schema) = KqlParser::parse_for_schema(
+            "source | summarize total = sum(value) by category | where unknown_field > 100",
+            ParserOptions::new()
+                .with_source_map_schema(source_schema)
+                .with_summary_map_schema(summary_schema),
+        );
+        assert!(result.is_err(), "Expected query to fail with unknown field");
+        
+        // Verify summary schema has total and category but not unknown_field
+        let schema = summary_schema.expect("Expected summary schema to be present");
+        assert!(schema.get_schema_for_key("total").is_some(), "Expected total to be added to summary schema");
+        assert!(schema.get_schema_for_key("category").is_some(), "Expected category to be added to summary schema");
+        assert!(schema.get_schema_for_key("unknown_field").is_none(), "Expected unknown_field NOT to be in summary schema");
+    }
+
+    #[test]
+    fn test_multiple_extends_accumulate_keys() {
+        // Test that multiple extend operations accumulate keys in the schema
+        let schema = ParserMapSchema::new()
+            .with_key_definition("field1", ParserMapKeySchema::String)
+            .set_allow_new_keys(true)
+            .set_restrict_reads_to_schema(true);
+
+        // Should parse successfully - both field2 and field3 are added
+        let (result, source_schema, _) = KqlParser::parse_for_schema(
+            "source | extend field2 = 1 | extend field3 = 2 | where field2 > 0 and field3 > 0",
+            ParserOptions::new().with_source_map_schema(schema),
+        );
+        assert!(result.is_ok(), "Expected multiple extends to accumulate keys");
+        
+        // Verify all fields are in the schema
+        let schema = source_schema.expect("Expected source schema to be present");
+        assert!(schema.get_schema_for_key("field1").is_some(), "Expected field1 in schema");
+        assert!(schema.get_schema_for_key("field2").is_some(), "Expected field2 to be added to schema");
+        assert!(schema.get_schema_for_key("field3").is_some(), "Expected field3 to be added to schema");
+        
+        // Verify the types were inferred correctly
+        assert_eq!(schema.get_schema_for_key("field2"), Some(&ParserMapKeySchema::Integer));
+        assert_eq!(schema.get_schema_for_key("field3"), Some(&ParserMapKeySchema::Integer));
+    }
+
+    #[test]
+    fn test_extend_infers_types() {
+        // Test that extend infers appropriate types for new keys
+        let schema = ParserMapSchema::new()
+            .set_allow_new_keys(true);
+
+        let (result, source_schema, _) = KqlParser::parse_for_schema(
+            "source | extend int_field = 123, str_field = 'hello', bool_field = true",
+            ParserOptions::new().with_source_map_schema(schema),
+        );
+        assert!(result.is_ok(), "Expected query with typed fields to parse");
+        
+        // Verify the schema has the new keys with correctly inferred types
+        let schema = source_schema.expect("Expected source schema to be present");
+        assert_eq!(schema.get_schema_for_key("int_field"), Some(&ParserMapKeySchema::Integer), "Expected int_field to be Integer");
+        assert_eq!(schema.get_schema_for_key("str_field"), Some(&ParserMapKeySchema::String), "Expected str_field to be String");
+        assert_eq!(schema.get_schema_for_key("bool_field"), Some(&ParserMapKeySchema::Boolean), "Expected bool_field to be Boolean");
+    }
+
+    #[test]
+    fn test_project_keep_mutates_schema() {
+        // Test that project-keep removes keys not in the keep list
+        let schema = ParserMapSchema::new()
+            .with_key_definition("field1", ParserMapKeySchema::String)
+            .with_key_definition("field2", ParserMapKeySchema::Integer)
+            .with_key_definition("field3", ParserMapKeySchema::Boolean)
+            .set_allow_new_keys(false)
+            .set_restrict_reads_to_schema(true);
+
+        let (result, source_schema, _) = KqlParser::parse_for_schema(
+            "source | project-keep field1, field2",
+            ParserOptions::new().with_source_map_schema(schema),
+        );
+        assert!(result.is_ok(), "Expected project-keep to parse successfully");
+        
+        // Verify only the kept fields remain in the schema
+        let schema = source_schema.expect("Expected source schema to be present");
+        assert!(schema.get_schema_for_key("field1").is_some(), "Expected field1 to be kept");
+        assert!(schema.get_schema_for_key("field2").is_some(), "Expected field2 to be kept");
+        assert!(schema.get_schema_for_key("field3").is_none(), "Expected field3 to be removed");
+    }
+
+    #[test]
+    fn test_project_away_mutates_schema() {
+        // Test that project-away removes specified keys
+        let schema = ParserMapSchema::new()
+            .with_key_definition("field1", ParserMapKeySchema::String)
+            .with_key_definition("field2", ParserMapKeySchema::Integer)
+            .with_key_definition("field3", ParserMapKeySchema::Boolean)
+            .set_allow_new_keys(false)
+            .set_restrict_reads_to_schema(true);
+
+        let (result, source_schema, _) = KqlParser::parse_for_schema(
+            "source | project-away field2",
+            ParserOptions::new().with_source_map_schema(schema),
+        );
+        assert!(result.is_ok(), "Expected project-away to parse successfully");
+        
+        // Verify field2 was removed, others remain
+        let schema = source_schema.expect("Expected source schema to be present");
+        assert!(schema.get_schema_for_key("field1").is_some(), "Expected field1 to remain");
+        assert!(schema.get_schema_for_key("field2").is_none(), "Expected field2 to be removed");
+        assert!(schema.get_schema_for_key("field3").is_some(), "Expected field3 to remain");
+    }
+
+    #[test]
+    fn test_project_rename_mutates_schema() {
+        // Test that project-rename renames keys in the schema
+        // Note: project-rename requires allow_new_keys=true to write the new key name
+        let schema = ParserMapSchema::new()
+            .with_key_definition("old_name", ParserMapKeySchema::String)
+            .with_key_definition("field2", ParserMapKeySchema::Integer)
+            .set_allow_new_keys(true)
+            .set_restrict_reads_to_schema(true);
+
+        let (result, source_schema, _) = KqlParser::parse_for_schema(
+            "source | project-rename new_name = old_name",
+            ParserOptions::new().with_source_map_schema(schema),
+        );
+        if let Err(ref errors) = result {
+            eprintln!("Errors:");
+            for error in errors {
+                eprintln!("  {:?}", error);
+            }
+        }
+        assert!(result.is_ok(), "Expected project-rename to parse successfully");
+        
+        // Verify old_name was renamed to new_name
+        let schema = source_schema.expect("Expected source schema to be present");
+        assert!(schema.get_schema_for_key("old_name").is_none(), "Expected old_name to be removed");
+        assert!(schema.get_schema_for_key("new_name").is_some(), "Expected new_name to be added");
+        assert_eq!(schema.get_schema_for_key("new_name"), Some(&ParserMapKeySchema::String), "Expected type to be preserved");
+        assert!(schema.get_schema_for_key("field2").is_some(), "Expected field2 to remain unchanged");
+    }
+
+    #[test]
+    fn test_project_rename_multiple_keys() {
+        // Test that project-rename can rename multiple keys at once
+        // Note: project-rename requires allow_new_keys=true to write the new key names
+        let schema = ParserMapSchema::new()
+            .with_key_definition("old1", ParserMapKeySchema::String)
+            .with_key_definition("old2", ParserMapKeySchema::Integer)
+            .with_key_definition("old3", ParserMapKeySchema::Boolean)
+            .set_allow_new_keys(true)
+            .set_restrict_reads_to_schema(true);
+
+        let (result, source_schema, _) = KqlParser::parse_for_schema(
+            "source | project-rename new1 = old1, new2 = old2",
+            ParserOptions::new().with_source_map_schema(schema),
+        );
+        assert!(result.is_ok(), "Expected project-rename with multiple keys to parse successfully");
+        
+        // Verify both renames occurred
+        let schema = source_schema.expect("Expected source schema to be present");
+        assert!(schema.get_schema_for_key("old1").is_none(), "Expected old1 to be removed");
+        assert!(schema.get_schema_for_key("old2").is_none(), "Expected old2 to be removed");
+        assert!(schema.get_schema_for_key("new1").is_some(), "Expected new1 to be added");
+        assert!(schema.get_schema_for_key("new2").is_some(), "Expected new2 to be added");
+        assert_eq!(schema.get_schema_for_key("new1"), Some(&ParserMapKeySchema::String), "Expected type to be preserved for new1");
+        assert_eq!(schema.get_schema_for_key("new2"), Some(&ParserMapKeySchema::Integer), "Expected type to be preserved for new2");
+        assert!(schema.get_schema_for_key("old3").is_some(), "Expected old3 to remain unchanged");
+    }
+
+    #[test]
+    fn test_project_operations_with_restrict_reads() {
+        // Test that after project operations, restrict_reads_to_schema is respected
+        let schema = ParserMapSchema::new()
+            .with_key_definition("field1", ParserMapKeySchema::String)
+            .with_key_definition("field2", ParserMapKeySchema::Integer)
+            .set_allow_new_keys(false)
+            .set_restrict_reads_to_schema(true);
+
+        // After project-keep, only field1 should be readable
+        let (result, _, _) = KqlParser::parse_for_schema(
+            "source | project-keep field1 | where field2 > 0",
+            ParserOptions::new().with_source_map_schema(schema.clone()),
+        );
+        assert!(result.is_err(), "Expected error when accessing removed field after project-keep");
+
+        // After project-away field2, it should not be readable
+        let (result, _, _) = KqlParser::parse_for_schema(
+            "source | project-away field2 | where field2 > 0",
+            ParserOptions::new().with_source_map_schema(schema.clone()),
+        );
+        assert!(result.is_err(), "Expected error when accessing removed field after project-away");
+
+        // After project-rename, old name should not be readable (need allow_new_keys for rename)
+        let schema_with_new_keys = schema.clone().set_allow_new_keys(true);
+        let (result, _, _) = KqlParser::parse_for_schema(
+            "source | project-rename new_name = field1 | where field1 == 'test'",
+            ParserOptions::new().with_source_map_schema(schema_with_new_keys.clone()),
+        );
+        assert!(result.is_err(), "Expected error when accessing old name after project-rename");
+
+        // But new name should work
+        let (result, _, _) = KqlParser::parse_for_schema(
+            "source | project-rename new_name = field1 | where new_name == 'test'",
+            ParserOptions::new().with_source_map_schema(schema_with_new_keys),
+        );
+        assert!(result.is_ok(), "Expected success when accessing new name after project-rename");
+    }
 }
+
+

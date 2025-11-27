@@ -74,6 +74,8 @@ pub struct ParserMapSchema {
     keys: HashMap<Box<str>, ParserMapKeySchema>,
     default_map_key: Option<Box<str>>,
     allow_undefined_keys: bool,
+    allow_new_keys: bool,
+    restrict_reads_to_schema: bool,
 }
 
 impl ParserMapSchema {
@@ -82,6 +84,8 @@ impl ParserMapSchema {
             keys: HashMap::new(),
             default_map_key: None,
             allow_undefined_keys: false,
+            allow_new_keys: false,
+            restrict_reads_to_schema: false,
         }
     }
 
@@ -117,6 +121,16 @@ impl ParserMapSchema {
         self
     }
 
+    pub fn set_allow_new_keys(mut self, allow: bool) -> ParserMapSchema {
+        self.allow_new_keys = allow;
+        self
+    }
+
+    pub fn set_restrict_reads_to_schema(mut self, restrict: bool) -> ParserMapSchema {
+        self.restrict_reads_to_schema = restrict;
+        self
+    }
+
     pub fn get_schema(&self) -> &HashMap<Box<str>, ParserMapKeySchema> {
         &self.keys
     }
@@ -141,6 +155,34 @@ impl ParserMapSchema {
 
     pub fn get_allow_undefined_keys(&self) -> bool {
         self.allow_undefined_keys
+    }
+
+    pub fn get_allow_new_keys(&self) -> bool {
+        self.allow_new_keys
+    }
+
+    pub fn get_restrict_reads_to_schema(&self) -> bool {
+        self.restrict_reads_to_schema
+    }
+
+    pub fn add_key(&mut self, name: &str, schema: ParserMapKeySchema) -> Result<(), ParserError> {
+        if !self.allow_new_keys {
+            return Err(ParserError::CannotAddNewKey {
+                key: name.into(),
+            });
+        }
+        self.keys.insert(name.into(), schema);
+        Ok(())
+    }
+
+    pub fn remove_key(&mut self, name: &str) {
+        self.keys.remove(name);
+    }
+
+    pub fn rename_key(&mut self, old_name: &str, new_name: &str) {
+        if let Some(schema) = self.keys.remove(old_name) {
+            self.keys.insert(new_name.into(), schema);
+        }
     }
 
     pub fn try_resolve_value_type(
@@ -197,6 +239,14 @@ impl ParserMapSchema {
                                 return Ok(key_schema.get_value_type());
                             }
                             None => {
+                                // If restrict_reads_to_schema is enabled, reject unknown keys
+                                if self.restrict_reads_to_schema {
+                                    return Err(ParserError::KeyNotFound {
+                                        location: r.get_query_location().clone(),
+                                        key: key.into(),
+                                    });
+                                }
+                                // Otherwise, fall back to allow_undefined_keys behavior
                                 if self.allow_undefined_keys {
                                     return Ok(None);
                                 }

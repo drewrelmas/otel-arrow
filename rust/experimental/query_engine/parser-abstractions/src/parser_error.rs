@@ -27,6 +27,11 @@ pub enum ParserError {
         location: QueryLocation,
         key: String,
     },
+
+    #[error("Cannot add new key '{key}' to schema when allow_new_keys is disabled")]
+    CannotAddNewKey {
+        key: String,
+    },
 }
 
 impl From<&ExpressionError> for ParserError {

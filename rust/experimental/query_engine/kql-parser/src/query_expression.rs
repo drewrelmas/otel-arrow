@@ -14,9 +14,21 @@ pub(crate) fn parse_query(
     query: &str,
     options: ParserOptions,
 ) -> Result<PipelineExpression, Vec<ParserError>> {
-    let mut errors = Vec::new();
-
     let state = ParserState::new_with_options(query, options);
+    let result = parse_query_internal(query, &state);
+    if let Err(errors) = result {
+        return Err(errors);
+    }
+    state.build()
+}
+
+/// Internal parsing function that populates the state but doesn't build the final result.
+/// Returns Ok(()) if parsing succeeded, Err with parse errors if it failed.
+pub(crate) fn parse_query_internal(
+    query: &str,
+    state: &ParserState,
+) -> Result<(), Vec<ParserError>> {
+    let mut errors = Vec::new();
 
     let parse_result = KqlPestParser::parse(Rule::query, query);
 
@@ -59,7 +71,7 @@ pub(crate) fn parse_query(
 
     for rule in query_rules {
         match rule.as_rule() {
-            Rule::let_expression => match parse_let_expression(rule, &state) {
+            Rule::let_expression => match parse_let_expression(rule, state) {
                 Ok(let_expression) => {
                     let mut validated = false;
 
@@ -111,7 +123,7 @@ pub(crate) fn parse_query(
                 }
                 Err(e) => errors.push(e),
             },
-            Rule::tabular_expression => match parse_tabular_expression(rule, &state) {
+            Rule::tabular_expression => match parse_tabular_expression(rule, state) {
                 Ok(expressions) => {
                     for e in expressions {
                         state.push_expression(e);
@@ -128,7 +140,7 @@ pub(crate) fn parse_query(
         return Err(errors);
     }
 
-    state.build()
+    Ok(())
 }
 
 #[cfg(test)]

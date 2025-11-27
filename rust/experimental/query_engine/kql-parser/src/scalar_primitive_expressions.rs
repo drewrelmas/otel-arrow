@@ -361,6 +361,7 @@ pub(crate) fn parse_accessor_expression(
     accessor_expression_rule: Pair<Rule>,
     scope: &dyn ParserScope,
     allow_root_scalar: bool,
+    allow_write_to_new_key: bool,
 ) -> Result<ScalarExpression, ParserError> {
     let query_location = to_query_location(&accessor_expression_rule);
 
@@ -661,6 +662,14 @@ pub(crate) fn parse_accessor_expression(
                             )),
                         );
                     } else if schema.get_allow_undefined_keys() {
+                        value_accessor.insert_selector(
+                            0,
+                            ScalarExpression::Static(StaticScalarExpression::String(
+                                root_accessor_identity,
+                            )),
+                        );
+                    } else if allow_write_to_new_key && schema.get_allow_new_keys() {
+                        // Allow writing to new keys if we're in a write context and allow_new_keys is enabled
                         value_accessor.insert_selector(
                             0,
                             ScalarExpression::Static(StaticScalarExpression::String(
@@ -1497,6 +1506,7 @@ mod tests {
             result.next().unwrap(),
             &ParserState::new("source.subkey['array'][0]"),
             true,
+            false,
         )
         .unwrap();
 
@@ -1533,7 +1543,7 @@ mod tests {
 
         state.push_variable_name("var");
 
-        let expression = parse_accessor_expression(result.next().unwrap(), &state, true).unwrap();
+        let expression = parse_accessor_expression(result.next().unwrap(), &state, true, false).unwrap();
 
         if let ScalarExpression::Source(s) = expression {
             assert_eq!(
@@ -1583,6 +1593,7 @@ mod tests {
                     ),
                 ),
                 true,
+                false,
             )
             .unwrap();
 
@@ -1649,6 +1660,7 @@ mod tests {
                     ),
                 ),
                 true,
+                false,
             )
             .unwrap();
 
@@ -1673,6 +1685,7 @@ mod tests {
                     ),
                 ),
                 true,
+                false,
             )
             .unwrap_err();
 
@@ -1736,6 +1749,7 @@ mod tests {
                 ParserOptions::new().with_attached_data_names(&["resource"]),
             ),
             true,
+            false,
         )
         .unwrap();
 
@@ -1761,7 +1775,7 @@ mod tests {
 
         state.push_variable_name("a");
 
-        let expression = parse_accessor_expression(result.next().unwrap(), &state, true).unwrap();
+        let expression = parse_accessor_expression(result.next().unwrap(), &state, true, false).unwrap();
 
         if let ScalarExpression::Variable(v) = expression {
             assert_eq!("a", v.get_name().get_value());
@@ -1814,7 +1828,7 @@ mod tests {
             );
 
             let expression =
-                parse_accessor_expression(result.next().unwrap(), &state, true).unwrap();
+                parse_accessor_expression(result.next().unwrap(), &state, true, false).unwrap();
 
             assert_eq!(expected, expression);
         };
@@ -1854,7 +1868,7 @@ mod tests {
             );
 
             let error =
-                parse_accessor_expression(result.next().unwrap(), &state, true).unwrap_err();
+                parse_accessor_expression(result.next().unwrap(), &state, true, false).unwrap_err();
 
             if let ParserError::QueryLanguageDiagnostic {
                 location: _,
@@ -1989,7 +2003,7 @@ mod tests {
             );
 
             let expression =
-                parse_accessor_expression(result.next().unwrap(), &state, false).unwrap();
+                parse_accessor_expression(result.next().unwrap(), &state, false, false).unwrap();
 
             assert_eq!(expected, expression);
         };
@@ -2062,7 +2076,7 @@ mod tests {
             );
 
             let expression =
-                parse_accessor_expression(result.next().unwrap(), &state, false).unwrap();
+                parse_accessor_expression(result.next().unwrap(), &state, false, false).unwrap();
 
             assert_eq!(expected, expression);
         };
@@ -2101,7 +2115,7 @@ mod tests {
             );
 
             let error =
-                parse_accessor_expression(result.next().unwrap(), &state, true).unwrap_err();
+                parse_accessor_expression(result.next().unwrap(), &state, true, false).unwrap_err();
 
             if let Some(expected_id) = expected_id {
                 if let ParserError::QueryLanguageDiagnostic {
@@ -2318,7 +2332,7 @@ mod tests {
             );
 
             let expression =
-                parse_accessor_expression(result.next().unwrap(), &state, false).unwrap();
+                parse_accessor_expression(result.next().unwrap(), &state, false, false).unwrap();
 
             assert_eq!(expected, expression);
         };
@@ -2370,7 +2384,7 @@ mod tests {
             );
 
             let expression =
-                parse_accessor_expression(result.next().unwrap(), &state, false).unwrap();
+                parse_accessor_expression(result.next().unwrap(), &state, false, false).unwrap();
 
             assert_eq!(expected, expression);
         };
@@ -2387,7 +2401,7 @@ mod tests {
             );
 
             let error =
-                parse_accessor_expression(result.next().unwrap(), &state, true).unwrap_err();
+                parse_accessor_expression(result.next().unwrap(), &state, true, false).unwrap_err();
 
             if let Some(expected_id) = expected_id {
                 if let ParserError::QueryLanguageDiagnostic {
@@ -2444,7 +2458,7 @@ mod tests {
             );
 
             let expression =
-                parse_accessor_expression(result.next().unwrap(), &state, false).unwrap();
+                parse_accessor_expression(result.next().unwrap(), &state, false, false).unwrap();
 
             assert_eq!(expected, expression);
         };

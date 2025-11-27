@@ -415,7 +415,7 @@ pub(crate) fn parse_scalar_unary_expression(
             // [scalar], [scalar]) evaluated as iff([logical],
             // accessor(some_constant1), accessor(some_constant2)) can safely
             // fold to iff([logical], String("constant1"), String("constant2")).
-            parse_accessor_expression(rule, scope, true)?
+            parse_accessor_expression(rule, scope, true, false)?
         }
         Rule::scalar_expression => parse_scalar_expression(rule, scope)?,
         _ => panic!("Unexpected rule in scalar_unary_expression: {rule}"),
