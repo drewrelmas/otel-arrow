@@ -361,6 +361,7 @@ pub(crate) fn parse_accessor_expression(
     accessor_expression_rule: Pair<Rule>,
     scope: &dyn ParserScope,
     allow_root_scalar: bool,
+    is_assignment_destination: bool,
 ) -> Result<ScalarExpression, ParserError> {
     let query_location = to_query_location(&accessor_expression_rule);
 
@@ -667,9 +668,8 @@ pub(crate) fn parse_accessor_expression(
                                 root_accessor_identity,
                             )),
                         );
-                    } else if schema.get_validation_mode() == SchemaValidationMode::Dynamic && !allow_root_scalar {
+                    } else if schema.get_validation_mode() == SchemaValidationMode::Dynamic && is_assignment_destination {
                         // In Dynamic mode, allow new keys only in write contexts (assignment destinations)
-                        // allow_root_scalar=false indicates we're parsing an assignment destination
                         value_accessor.insert_selector(
                             0,
                             ScalarExpression::Static(StaticScalarExpression::String(
@@ -1507,6 +1507,7 @@ mod tests {
             result.next().unwrap(),
             &ParserState::new("source.subkey['array'][0]"),
             true,
+            false,
         )
         .unwrap();
 
@@ -1543,7 +1544,7 @@ mod tests {
 
         state.push_variable_name("var");
 
-        let expression = parse_accessor_expression(result.next().unwrap(), &state, true).unwrap();
+        let expression = parse_accessor_expression(result.next().unwrap(), &state, true, false).unwrap();
 
         if let ScalarExpression::Source(s) = expression {
             assert_eq!(
@@ -1593,6 +1594,7 @@ mod tests {
                     ),
                 ),
                 true,
+                false,
             )
             .unwrap();
 
@@ -1659,6 +1661,7 @@ mod tests {
                     ),
                 ),
                 true,
+                false,
             )
             .unwrap();
 
@@ -1683,6 +1686,7 @@ mod tests {
                     ),
                 ),
                 true,
+                false,
             )
             .unwrap_err();
 
@@ -1746,6 +1750,7 @@ mod tests {
                 ParserOptions::new().with_attached_data_names(&["resource"]),
             ),
             true,
+            false,
         )
         .unwrap();
 
@@ -1771,7 +1776,7 @@ mod tests {
 
         state.push_variable_name("a");
 
-        let expression = parse_accessor_expression(result.next().unwrap(), &state, true).unwrap();
+        let expression = parse_accessor_expression(result.next().unwrap(), &state, true, false).unwrap();
 
         if let ScalarExpression::Variable(v) = expression {
             assert_eq!("a", v.get_name().get_value());
@@ -1824,7 +1829,7 @@ mod tests {
             );
 
             let expression =
-                parse_accessor_expression(result.next().unwrap(), &state, true).unwrap();
+                parse_accessor_expression(result.next().unwrap(), &state, true, false).unwrap();
 
             assert_eq!(expected, expression);
         };
@@ -1864,7 +1869,7 @@ mod tests {
             );
 
             let error =
-                parse_accessor_expression(result.next().unwrap(), &state, true).unwrap_err();
+                parse_accessor_expression(result.next().unwrap(), &state, true, false).unwrap_err();
 
             if let ParserError::QueryLanguageDiagnostic {
                 location: _,
@@ -1999,7 +2004,7 @@ mod tests {
             );
 
             let expression =
-                parse_accessor_expression(result.next().unwrap(), &state, false).unwrap();
+                parse_accessor_expression(result.next().unwrap(), &state, false, false).unwrap();
 
             assert_eq!(expected, expression);
         };
@@ -2072,7 +2077,7 @@ mod tests {
             );
 
             let expression =
-                parse_accessor_expression(result.next().unwrap(), &state, false).unwrap();
+                parse_accessor_expression(result.next().unwrap(), &state, false, false).unwrap();
 
             assert_eq!(expected, expression);
         };
@@ -2111,7 +2116,7 @@ mod tests {
             );
 
             let error =
-                parse_accessor_expression(result.next().unwrap(), &state, true).unwrap_err();
+                parse_accessor_expression(result.next().unwrap(), &state, true, false).unwrap_err();
 
             if let Some(expected_id) = expected_id {
                 if let ParserError::QueryLanguageDiagnostic {
@@ -2328,7 +2333,7 @@ mod tests {
             );
 
             let expression =
-                parse_accessor_expression(result.next().unwrap(), &state, false).unwrap();
+                parse_accessor_expression(result.next().unwrap(), &state, false, false).unwrap();
 
             assert_eq!(expected, expression);
         };
@@ -2380,7 +2385,7 @@ mod tests {
             );
 
             let expression =
-                parse_accessor_expression(result.next().unwrap(), &state, false).unwrap();
+                parse_accessor_expression(result.next().unwrap(), &state, false, false).unwrap();
 
             assert_eq!(expected, expression);
         };
@@ -2397,7 +2402,7 @@ mod tests {
             );
 
             let error =
-                parse_accessor_expression(result.next().unwrap(), &state, true).unwrap_err();
+                parse_accessor_expression(result.next().unwrap(), &state, true, false).unwrap_err();
 
             if let Some(expected_id) = expected_id {
                 if let ParserError::QueryLanguageDiagnostic {
@@ -2454,7 +2459,7 @@ mod tests {
             );
 
             let expression =
-                parse_accessor_expression(result.next().unwrap(), &state, false).unwrap();
+                parse_accessor_expression(result.next().unwrap(), &state, false, false).unwrap();
 
             assert_eq!(expected, expression);
         };
@@ -2486,5 +2491,159 @@ mod tests {
                 None,
             )),
         );
+    }
+
+    #[test]
+    fn test_parse_accessor_expression_with_dynamic_schema_and_is_assignment_destination() {
+        // Test that Dynamic mode + is_assignment_destination=true allows undefined keys
+        let run_test_write_context_success = |input: &str| {
+            let mut result = KqlPestParser::parse(Rule::accessor_expression, input).unwrap();
+
+            let state = ParserState::new_with_options(
+                input,
+                ParserOptions::new().with_source_map_schema(
+                    ParserMapSchema::new()
+                        .with_key_definition("existing_key", ParserMapKeySchema::String)
+                        .set_validation_mode(SchemaValidationMode::Dynamic),
+                ),
+            );
+
+            // This should succeed - writing to undefined key in Dynamic mode
+            let result = parse_accessor_expression(result.next().unwrap(), &state, false, true);
+            assert!(
+                result.is_ok(),
+                "Should allow undefined key '{}' in Dynamic mode write context",
+                input
+            );
+        };
+
+        // Test that Dynamic mode + is_assignment_destination=false rejects undefined keys
+        let run_test_read_context_failure = |input: &str| {
+            let mut result = KqlPestParser::parse(Rule::accessor_expression, input).unwrap();
+
+            let state = ParserState::new_with_options(
+                input,
+                ParserOptions::new().with_source_map_schema(
+                    ParserMapSchema::new()
+                        .with_key_definition("existing_key", ParserMapKeySchema::String)
+                        .set_validation_mode(SchemaValidationMode::Dynamic),
+                ),
+            );
+
+            // This should fail - reading from undefined key in Dynamic mode
+            let result = parse_accessor_expression(result.next().unwrap(), &state, true, false);
+            assert!(
+                result.is_err(),
+                "Should reject undefined key '{}' in Dynamic mode read context",
+                input
+            );
+
+            if let Err(ParserError::QueryLanguageDiagnostic {
+                diagnostic_id,
+                message,
+                ..
+            }) = result
+            {
+                assert_eq!(diagnostic_id, "KS142");
+                assert!(message.contains(input));
+            } else {
+                panic!("Expected QueryLanguageDiagnostic with KS142");
+            }
+        };
+
+        // Test that Static mode rejects undefined keys regardless of is_assignment_destination
+        let run_test_static_mode_failure = |input: &str, is_assignment: bool| {
+            let mut result = KqlPestParser::parse(Rule::accessor_expression, input).unwrap();
+
+            let state = ParserState::new_with_options(
+                input,
+                ParserOptions::new().with_source_map_schema(
+                    ParserMapSchema::new()
+                        .with_key_definition("existing_key", ParserMapKeySchema::String)
+                        .set_validation_mode(SchemaValidationMode::Static),
+                ),
+            );
+
+            // This should fail - Static mode always rejects undefined keys
+            let result =
+                parse_accessor_expression(result.next().unwrap(), &state, false, is_assignment);
+            assert!(
+                result.is_err(),
+                "Should reject undefined key '{}' in Static mode (is_assignment={})",
+                input,
+                is_assignment
+            );
+
+            if let Err(ParserError::QueryLanguageDiagnostic {
+                diagnostic_id,
+                message,
+                ..
+            }) = result
+            {
+                assert_eq!(diagnostic_id, "KS142");
+                assert!(message.contains(input));
+            } else {
+                panic!("Expected QueryLanguageDiagnostic with KS142");
+            }
+        };
+
+        // Dynamic mode: write context should allow new keys
+        run_test_write_context_success("new_key");
+        run_test_write_context_success("another_new_key");
+
+        // Dynamic mode: read context should reject new keys
+        run_test_read_context_failure("undefined_key");
+        run_test_read_context_failure("missing_field");
+
+        // Static mode: both contexts should reject new keys
+        run_test_static_mode_failure("new_key_static", true);
+        run_test_static_mode_failure("new_key_static", false);
+    }
+
+    #[test]
+    fn test_parse_accessor_expression_existing_key_works_in_all_modes() {
+        // Verify that existing keys work in all combinations
+        let test_existing_key = |validation_mode: SchemaValidationMode,
+                                  is_assignment: bool,
+                                  allow_root_scalar: bool| {
+            let input = "existing_key";
+            let mut result = KqlPestParser::parse(Rule::accessor_expression, input).unwrap();
+
+            let state = ParserState::new_with_options(
+                input,
+                ParserOptions::new().with_source_map_schema(
+                    ParserMapSchema::new()
+                        .with_key_definition("existing_key", ParserMapKeySchema::String)
+                        .set_validation_mode(validation_mode),
+                ),
+            );
+
+            let result = parse_accessor_expression(
+                result.next().unwrap(),
+                &state,
+                allow_root_scalar,
+                is_assignment,
+            );
+            assert!(
+                result.is_ok(),
+                "Existing key should work in {:?} mode (is_assignment={}, allow_root_scalar={})",
+                validation_mode,
+                is_assignment,
+                allow_root_scalar
+            );
+        };
+
+        // Test all combinations for existing keys
+        for &validation_mode in &[
+            SchemaValidationMode::None,
+            SchemaValidationMode::Static,
+            SchemaValidationMode::Dynamic,
+        ] {
+            for &is_assignment in &[true, false] {
+                for &allow_root_scalar in &[true, false] {
+                    test_existing_key(validation_mode, is_assignment, allow_root_scalar);
+                }
+            }
+        }
     }
 }

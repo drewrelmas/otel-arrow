@@ -51,7 +51,11 @@ pub(crate) fn parse_source_assignment_expression(
         // String("constant1") = [expression] we need to treat the accessor in
         // this case as an assignment on the source
         // Source(MapKey("some_constant1")) = [expression].
-        Rule::accessor_expression => parse_accessor_expression(destination_rule, scope, false)?,
+        //
+        // is_assignment_destination=true because this is a write context where
+        // we're assigning to a destination, which in Dynamic schema mode should
+        // allow creating new keys that don't yet exist in the schema.
+        Rule::accessor_expression => parse_accessor_expression(destination_rule, scope, false, true)?,
         _ => panic!("Unexpected rule in assignment_expression: {destination_rule}"),
     };
 

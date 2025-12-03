@@ -164,7 +164,7 @@ pub(crate) fn parse_project_expression(
                 )));
             }
             Rule::accessor_expression => {
-                let accessor_expression = parse_accessor_expression(rule, scope, true)?;
+                let accessor_expression = parse_accessor_expression(rule, scope, true, false)?;
 
                 if let ScalarExpression::Source(s) = &accessor_expression {
                     process_map_selection_source_scalar_expression(
@@ -239,7 +239,10 @@ pub(crate) fn parse_project_keep_expression(
                 }
             }
             Rule::accessor_expression => {
-                let accessor_expression = parse_accessor_expression(rule, scope, true)?;
+                // Note: allow_root_scalar=true to allow referencing constants/variables.
+                // is_assignment_destination=false because project-keep is a read context
+                // - we're selecting which existing fields to keep, not creating new ones.
+                let accessor_expression = parse_accessor_expression(rule, scope, true, false)?;
 
                 if let ScalarExpression::Source(s) = &accessor_expression {
                     process_map_selection_source_scalar_expression(
@@ -341,7 +344,10 @@ pub(crate) fn parse_project_away_expression(
                 }
             }
             Rule::accessor_expression => {
-                let accessor_expression = parse_accessor_expression(rule, scope, true)?;
+                // Note: allow_root_scalar=true to allow referencing constants/variables.
+                // is_assignment_destination=false because project-away is a read context
+                // - we're selecting which existing fields to remove, not creating new ones.
+                let accessor_expression = parse_accessor_expression(rule, scope, true, false)?;
 
                 if let ScalarExpression::Source(s) = &accessor_expression {
                     process_map_selection_source_scalar_expression(
