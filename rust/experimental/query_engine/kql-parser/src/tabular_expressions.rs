@@ -3597,6 +3597,114 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_where_expression_with_static_schema() {
+        let run_test_failure = |input: &str, expected_id: &str, expected_msg: &str| {
+            let state = ParserState::new_with_options(
+                input,
+                ParserOptions::new().with_source_map_schema(
+                    ParserMapSchema::new()
+                        .with_key_definition("existing_key", ParserMapKeySchema::String)
+                        .set_validation_mode(SchemaValidationMode::Static),
+                ),
+            );
+
+            let mut result = KqlPestParser::parse(Rule::where_expression, input).unwrap();
+
+            let error = parse_where_expression(result.next().unwrap(), &state).unwrap_err();
+
+            if let ParserError::QueryLanguageDiagnostic {
+                location: _,
+                diagnostic_id: id,
+                message: msg,
+            } = error
+            {
+                assert_eq!(expected_id, id);
+                assert_eq!(expected_msg, msg);
+            } else {
+                panic!("Expected QueryLanguageDiagnostic, got: {:?}", error);
+            }
+        };
+
+        run_test_failure(
+            "where non_existent_key == 'value'",
+            "KS142",
+            "The name 'non_existent_key' does not refer to any known column, table, variable or function",
+        );
+
+        run_test_failure(
+            "where missing_field > 100",
+            "KS142",
+            "The name 'missing_field' does not refer to any known column, table, variable or function",
+        );
+    }
+
+    #[test]
+    fn test_parse_where_expression_with_dynamic_schema() {
+        let run_test_failure = |input: &str, expected_id: &str, expected_msg: &str| {
+            let state = ParserState::new_with_options(
+                input,
+                ParserOptions::new().with_source_map_schema(
+                    ParserMapSchema::new()
+                        .with_key_definition("existing_key", ParserMapKeySchema::String)
+                        .set_validation_mode(SchemaValidationMode::Dynamic),
+                ),
+            );
+
+            let mut result = KqlPestParser::parse(Rule::where_expression, input).unwrap();
+
+            let error = parse_where_expression(result.next().unwrap(), &state).unwrap_err();
+
+            if let ParserError::QueryLanguageDiagnostic {
+                location: _,
+                diagnostic_id: id,
+                message: msg,
+            } = error
+            {
+                assert_eq!(expected_id, id);
+                assert_eq!(expected_msg, msg);
+            } else {
+                panic!("Expected QueryLanguageDiagnostic, got: {:?}", error);
+            }
+        };
+
+        // In Dynamic mode, keys must still exist when referenced in where clauses
+        run_test_failure(
+            "where non_existent_key == 'value'",
+            "KS142",
+            "The name 'non_existent_key' does not refer to any known column, table, variable or function",
+        );
+
+        run_test_failure(
+            "where missing_field > 100",
+            "KS142",
+            "The name 'missing_field' does not refer to any known column, table, variable or function",
+        );
+    }
+
+    #[test]
+    fn test_parse_where_expression_with_none_schema() {
+        let run_test_success = |input: &str| {
+            let state = ParserState::new_with_options(
+                input,
+                ParserOptions::new().with_source_map_schema(
+                    ParserMapSchema::new()
+                        .with_key_definition("existing_key", ParserMapKeySchema::String)
+                        .set_validation_mode(SchemaValidationMode::None),
+                ),
+            );
+
+            let mut result = KqlPestParser::parse(Rule::where_expression, input).unwrap();
+
+            // Should succeed - None mode allows any key
+            let _ = parse_where_expression(result.next().unwrap(), &state).unwrap();
+        };
+
+        // In None mode, undefined keys are allowed
+        run_test_success("where non_existent_key == 'value'");
+        run_test_success("where missing_field > 100");
+    }
+
+    #[test]
     fn test_parse_summarize_expression() {
         let run_test_success = |input: &str, expected: SummaryDataExpression| {
             let state = ParserState::new_with_options(

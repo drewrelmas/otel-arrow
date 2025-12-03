@@ -660,9 +660,16 @@ pub(crate) fn parse_accessor_expression(
                                 StringScalarExpression::new(root_location, default_map_key),
                             )),
                         );
-                    } else if schema.get_validation_mode() == SchemaValidationMode::None
-                        || schema.get_validation_mode() == SchemaValidationMode::Dynamic
-                    {
+                    } else if schema.get_validation_mode() == SchemaValidationMode::None {
+                        value_accessor.insert_selector(
+                            0,
+                            ScalarExpression::Static(StaticScalarExpression::String(
+                                root_accessor_identity,
+                            )),
+                        );
+                    } else if schema.get_validation_mode() == SchemaValidationMode::Dynamic && !allow_root_scalar {
+                        // In Dynamic mode, allow new keys only in write contexts (assignment destinations)
+                        // allow_root_scalar=false indicates we're parsing an assignment destination
                         value_accessor.insert_selector(
                             0,
                             ScalarExpression::Static(StaticScalarExpression::String(
@@ -670,6 +677,7 @@ pub(crate) fn parse_accessor_expression(
                             )),
                         );
                     } else {
+                        // Static mode or Dynamic mode in read contexts require keys to exist
                         return Err(ParserError::QueryLanguageDiagnostic {
                             location: root_accessor_identity.get_query_location().clone(),
                             diagnostic_id: "KS142",
