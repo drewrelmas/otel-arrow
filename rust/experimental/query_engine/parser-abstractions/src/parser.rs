@@ -7,6 +7,16 @@ use data_engine_expressions::*;
 
 use crate::*;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SchemaValidationMode {
+    /// Key references are not validated against schema
+    None,
+    /// All keys referenced must exist in the schema and new keys cannot be defined in queries
+    Static,
+    /// All keys referenced must exist in the schema. New keys may be defined in queries and will be added dynamically to schema
+    Dynamic,
+}
+
 pub trait Parser {
     fn parse(query: &str) -> Result<PipelineExpression, Vec<ParserError>> {
         Self::parse_with_options(query, ParserOptions::new())
@@ -73,7 +83,7 @@ impl Default for ParserOptions {
 pub struct ParserMapSchema {
     keys: HashMap<Box<str>, ParserMapKeySchema>,
     default_map_key: Option<Box<str>>,
-    allow_undefined_keys: bool,
+    validation_mode: SchemaValidationMode,
 }
 
 impl ParserMapSchema {
@@ -81,7 +91,7 @@ impl ParserMapSchema {
         Self {
             keys: HashMap::new(),
             default_map_key: None,
-            allow_undefined_keys: false,
+            validation_mode: SchemaValidationMode::Static,
         }
     }
 
@@ -95,8 +105,8 @@ impl ParserMapSchema {
     }
 
     pub fn set_default_map_key(mut self, name: &str) -> ParserMapSchema {
-        if self.allow_undefined_keys {
-            panic!("Default map cannot be specified when undefined keys is enabled");
+        if self.validation_mode == SchemaValidationMode::None {
+            panic!("Default map cannot be specified when validation mode is None");
         }
         let definition = self
             .keys
@@ -109,11 +119,11 @@ impl ParserMapSchema {
         self
     }
 
-    pub fn set_allow_undefined_keys(mut self) -> ParserMapSchema {
-        if self.default_map_key.is_some() {
-            panic!("Undefined keys cannot be enabled when default map is specified");
+    pub fn set_validation_mode(mut self, mode: SchemaValidationMode) -> ParserMapSchema {
+        if self.default_map_key.is_some() && mode == SchemaValidationMode::None {
+            panic!("Validation mode None cannot be set when default map is specified");
         }
-        self.allow_undefined_keys = true;
+        self.validation_mode = mode;
         self
     }
 
@@ -139,8 +149,8 @@ impl ParserMapSchema {
         }
     }
 
-    pub fn get_allow_undefined_keys(&self) -> bool {
-        self.allow_undefined_keys
+    pub fn get_validation_mode(&self) -> SchemaValidationMode {
+        self.validation_mode
     }
 
     pub fn try_resolve_value_type(
@@ -197,7 +207,7 @@ impl ParserMapSchema {
                                 return Ok(key_schema.get_value_type());
                             }
                             None => {
-                                if self.allow_undefined_keys {
+                                if self.validation_mode == SchemaValidationMode::None {
                                     return Ok(None);
                                 }
                                 return Err(ParserError::KeyNotFound {

@@ -11,8 +11,8 @@ use data_engine_expressions::*;
 use crate::{ParserError, ParserMapSchema, ParserOptions};
 
 pub struct ParserState {
-    source_map_schema: Option<ParserMapSchema>,
-    summary_map_schema: Option<ParserMapSchema>,
+    source_map_schema: RefCell<Option<ParserMapSchema>>,
+    summary_map_schema: RefCell<Option<ParserMapSchema>>,
     attached_data_names: HashSet<Box<str>>,
     global_variable_names: RefCell<HashSet<Box<str>>>,
     variable_names: RefCell<HashSet<Box<str>>>,
@@ -27,8 +27,8 @@ impl ParserState {
 
     pub fn new_with_options(query: &str, options: ParserOptions) -> ParserState {
         Self {
-            source_map_schema: options.source_map_schema,
-            summary_map_schema: options.summary_map_schema,
+            source_map_schema: RefCell::new(options.source_map_schema),
+            summary_map_schema: RefCell::new(options.summary_map_schema),
             attached_data_names: options.attached_data_names,
             global_variable_names: RefCell::new(HashSet::new()),
             variable_names: RefCell::new(HashSet::new()),
@@ -63,12 +63,50 @@ impl ParserScope for ParserState {
         Ref::map(self.pipeline_builder.borrow(), |v| v.as_ref())
     }
 
-    fn get_source_schema(&self) -> Option<&ParserMapSchema> {
-        self.source_map_schema.as_ref()
+    fn get_source_schema(&self) -> Option<Ref<'_, ParserMapSchema>> {
+        let schema = self.source_map_schema.borrow();
+        if schema.is_some() {
+            Some(Ref::map(schema, |s| s.as_ref().unwrap()))
+        } else {
+            None
+        }
     }
 
-    fn get_summary_schema(&self) -> Option<&ParserMapSchema> {
-        self.summary_map_schema.as_ref()
+    fn get_summary_schema(&self) -> Option<Ref<'_, ParserMapSchema>> {
+        let schema = self.summary_map_schema.borrow();
+        if schema.is_some() {
+            Some(Ref::map(schema, |s| s.as_ref().unwrap()))
+        } else {
+            None
+        }
+    }
+
+    fn add_key_to_source_schema(&self, key: &str, key_schema: crate::ParserMapKeySchema) {
+        let mut schema = self.source_map_schema.borrow_mut();
+        if let Some(s) = schema.as_mut() {
+            s.get_schema_mut().insert(key.into(), key_schema);
+        }
+    }
+
+    fn add_key_to_summary_schema(&self, key: &str, key_schema: crate::ParserMapKeySchema) {
+        let mut schema = self.summary_map_schema.borrow_mut();
+        if let Some(s) = schema.as_mut() {
+            s.get_schema_mut().insert(key.into(), key_schema);
+        }
+    }
+
+    fn remove_key_from_source_schema(&self, key: &str) {
+        let mut schema = self.source_map_schema.borrow_mut();
+        if let Some(s) = schema.as_mut() {
+            s.get_schema_mut().remove(key);
+        }
+    }
+
+    fn remove_key_from_summary_schema(&self, key: &str) {
+        let mut schema = self.summary_map_schema.borrow_mut();
+        if let Some(s) = schema.as_mut() {
+            s.get_schema_mut().remove(key);
+        }
     }
 
     fn is_well_defined_identifier(&self, name: &str) -> bool {
@@ -117,8 +155,8 @@ impl ParserScope for ParserState {
     fn create_scope<'a>(&'a self, options: ParserOptions) -> ParserStateScope<'a> {
         ParserStateScope {
             pipeline_builder: &self.pipeline_builder,
-            source_map_schema: options.source_map_schema,
-            summary_map_schema: options.summary_map_schema,
+            source_map_schema: RefCell::new(options.source_map_schema),
+            summary_map_schema: RefCell::new(options.summary_map_schema),
             attached_data_names: options.attached_data_names,
             global_variable_names: &self.global_variable_names,
             variable_names: RefCell::new(HashSet::new()),
@@ -129,8 +167,8 @@ impl ParserScope for ParserState {
 
 pub struct ParserStateScope<'a> {
     pipeline_builder: &'a RefCell<PipelineExpressionBuilder>,
-    source_map_schema: Option<ParserMapSchema>,
-    summary_map_schema: Option<ParserMapSchema>,
+    source_map_schema: RefCell<Option<ParserMapSchema>>,
+    summary_map_schema: RefCell<Option<ParserMapSchema>>,
     attached_data_names: HashSet<Box<str>>,
     global_variable_names: &'a RefCell<HashSet<Box<str>>>,
     variable_names: RefCell<HashSet<Box<str>>>,
@@ -142,12 +180,50 @@ impl ParserScope for ParserStateScope<'_> {
         Ref::map(self.pipeline_builder.borrow(), |v| v.as_ref())
     }
 
-    fn get_source_schema(&self) -> Option<&ParserMapSchema> {
-        self.source_map_schema.as_ref()
+    fn get_source_schema(&self) -> Option<Ref<'_, ParserMapSchema>> {
+        let schema = self.source_map_schema.borrow();
+        if schema.is_some() {
+            Some(Ref::map(schema, |s| s.as_ref().unwrap()))
+        } else {
+            None
+        }
     }
 
-    fn get_summary_schema(&self) -> Option<&ParserMapSchema> {
-        self.summary_map_schema.as_ref()
+    fn get_summary_schema(&self) -> Option<Ref<'_, ParserMapSchema>> {
+        let schema = self.summary_map_schema.borrow();
+        if schema.is_some() {
+            Some(Ref::map(schema, |s| s.as_ref().unwrap()))
+        } else {
+            None
+        }
+    }
+
+    fn add_key_to_source_schema(&self, key: &str, key_schema: crate::ParserMapKeySchema) {
+        let mut schema = self.source_map_schema.borrow_mut();
+        if let Some(s) = schema.as_mut() {
+            s.get_schema_mut().insert(key.into(), key_schema);
+        }
+    }
+
+    fn add_key_to_summary_schema(&self, key: &str, key_schema: crate::ParserMapKeySchema) {
+        let mut schema = self.summary_map_schema.borrow_mut();
+        if let Some(s) = schema.as_mut() {
+            s.get_schema_mut().insert(key.into(), key_schema);
+        }
+    }
+
+    fn remove_key_from_source_schema(&self, key: &str) {
+        let mut schema = self.source_map_schema.borrow_mut();
+        if let Some(s) = schema.as_mut() {
+            s.get_schema_mut().remove(key);
+        }
+    }
+
+    fn remove_key_from_summary_schema(&self, key: &str) {
+        let mut schema = self.summary_map_schema.borrow_mut();
+        if let Some(s) = schema.as_mut() {
+            s.get_schema_mut().remove(key);
+        }
     }
 
     fn is_well_defined_identifier(&self, name: &str) -> bool {
@@ -196,8 +272,8 @@ impl ParserScope for ParserStateScope<'_> {
     fn create_scope<'a>(&'a self, options: ParserOptions) -> ParserStateScope<'a> {
         ParserStateScope {
             pipeline_builder: self.pipeline_builder,
-            source_map_schema: options.source_map_schema,
-            summary_map_schema: options.summary_map_schema,
+            source_map_schema: RefCell::new(options.source_map_schema),
+            summary_map_schema: RefCell::new(options.summary_map_schema),
             attached_data_names: options.attached_data_names,
             global_variable_names: self.global_variable_names,
             variable_names: RefCell::new(HashSet::new()),
@@ -217,9 +293,17 @@ pub trait ParserScope {
         Ref::map(self.get_pipeline(), |p| p.get_query_slice(query_location))
     }
 
-    fn get_source_schema(&self) -> Option<&ParserMapSchema>;
+    fn get_source_schema(&self) -> Option<Ref<'_, ParserMapSchema>>;
 
-    fn get_summary_schema(&self) -> Option<&ParserMapSchema>;
+    fn get_summary_schema(&self) -> Option<Ref<'_, ParserMapSchema>>;
+
+    fn add_key_to_source_schema(&self, key: &str, key_schema: crate::ParserMapKeySchema);
+
+    fn add_key_to_summary_schema(&self, key: &str, key_schema: crate::ParserMapKeySchema);
+
+    fn remove_key_from_source_schema(&self, key: &str);
+
+    fn remove_key_from_summary_schema(&self, key: &str);
 
     fn is_well_defined_identifier(&self, name: &str) -> bool;
 

@@ -370,7 +370,7 @@ fn build_log_record_schema(
             }
         }
 
-        let allow_undefined_keys = attributes_schema.get_allow_undefined_keys();
+        let validation_mode = attributes_schema.get_validation_mode();
 
         log_record_schema = log_record_schema.with_key_definition(
             "Attributes",
@@ -379,8 +379,8 @@ fn build_log_record_schema(
 
         let mut summary_schema = ParserMapSchema::new();
 
-        if allow_undefined_keys {
-            summary_schema = summary_schema.set_allow_undefined_keys();
+        if validation_mode != SchemaValidationMode::Static {
+            summary_schema = summary_schema.set_validation_mode(validation_mode);
         }
 
         for (top_level_key, top_level_key_schema) in log_record_schema.get_schema() {
@@ -746,7 +746,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_kql_query_into_pipeline_with_attributes_schema_and_allow_undefined_keys() {
+    fn test_parse_kql_query_into_pipeline_with_attributes_schema_and_validation_mode_none() {
         let run_test_success = |query: &str| {
             parse_kql_query_into_pipeline(
                 query,
@@ -755,7 +755,7 @@ mod tests {
                         ParserMapSchema::new()
                             .with_key_definition("Body", ParserMapKeySchema::Any)
                             .with_key_definition("int_value", ParserMapKeySchema::Integer)
-                            .set_allow_undefined_keys(),
+                            .set_validation_mode(SchemaValidationMode::None),
                     ),
                 ),
             )

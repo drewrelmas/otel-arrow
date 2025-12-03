@@ -31,6 +31,51 @@ pub(crate) fn parse_extend_expression(
                 let (query_location, source, destination) =
                     parse_source_assignment_expression(rule, scope)?;
 
+                // If there is a schema defined and using Dynamic mode
+                let should_add_key = if let Some(schema) = scope.get_source_schema() {
+                    schema.get_validation_mode() == SchemaValidationMode::Dynamic
+                        && destination.get_value_accessor().get_selectors().first()
+                            .and_then(|sel| {
+                                if let ScalarExpression::Static(StaticScalarExpression::String(key_name)) = sel {
+                                    Some(schema.get_schema_for_key(key_name.get_value()).is_none())
+                                } else {
+                                    None
+                                }
+                            })
+                            .unwrap_or(false)
+                } else {
+                    false
+                };
+
+                if should_add_key {
+                    if let Some(first_selector) = destination.get_value_accessor().get_selectors().first() {
+                        if let ScalarExpression::Static(StaticScalarExpression::String(key_name)) = first_selector {
+                            let key = key_name.get_value();
+                            // Infer the type from the source expression
+                            let key_schema = if let Ok(Some(value_type)) = scope.try_resolve_value_type(&mut source.clone()) {
+                                match value_type {
+                                    ValueType::Boolean => ParserMapKeySchema::Boolean,
+                                    ValueType::DateTime => ParserMapKeySchema::DateTime,
+                                    ValueType::Double => ParserMapKeySchema::Double,
+                                    ValueType::Integer => ParserMapKeySchema::Integer,
+                                    ValueType::String => ParserMapKeySchema::String,
+                                    ValueType::TimeSpan => ParserMapKeySchema::TimeSpan,
+                                    ValueType::Regex => ParserMapKeySchema::Regex,
+                                    ValueType::Array => ParserMapKeySchema::Array,
+                                    ValueType::Map => ParserMapKeySchema::Map(None),
+                                    ValueType::Null => ParserMapKeySchema::Any,
+                                }
+                            } else {
+                                // Default to Any if we can't infer the type
+                                ParserMapKeySchema::Any
+                            };
+                            
+                            // Add the key to the source schema
+                            scope.add_key_to_source_schema(key, key_schema);
+                        }
+                    }
+                }
+
                 set_expressions.push(TransformExpression::Set(SetTransformExpression::new(
                     query_location,
                     source,
@@ -70,6 +115,47 @@ pub(crate) fn parse_project_expression(
                     &destination,
                     &mut reduction,
                 )?;
+
+                // If there is a schema defined and using Dynamic mode
+                let should_add_key = if let Some(schema) = scope.get_source_schema() {
+                    schema.get_validation_mode() == SchemaValidationMode::Dynamic
+                        && destination.get_value_accessor().get_selectors().first()
+                            .and_then(|sel| {
+                                if let ScalarExpression::Static(StaticScalarExpression::String(key_name)) = sel {
+                                    Some(schema.get_schema_for_key(key_name.get_value()).is_none())
+                                } else {
+                                    None
+                                }
+                            })
+                            .unwrap_or(false)
+                } else {
+                    false
+                };
+
+                if should_add_key {
+                    if let Some(first_selector) = destination.get_value_accessor().get_selectors().first() {
+                        if let ScalarExpression::Static(StaticScalarExpression::String(key_name)) = first_selector {
+                            let key = key_name.get_value();
+                            let key_schema = if let Ok(Some(value_type)) = scope.try_resolve_value_type(&mut source.clone()) {
+                                match value_type {
+                                    ValueType::Boolean => ParserMapKeySchema::Boolean,
+                                    ValueType::DateTime => ParserMapKeySchema::DateTime,
+                                    ValueType::Double => ParserMapKeySchema::Double,
+                                    ValueType::Integer => ParserMapKeySchema::Integer,
+                                    ValueType::String => ParserMapKeySchema::String,
+                                    ValueType::TimeSpan => ParserMapKeySchema::TimeSpan,
+                                    ValueType::Regex => ParserMapKeySchema::Regex,
+                                    ValueType::Array => ParserMapKeySchema::Array,
+                                    ValueType::Map => ParserMapKeySchema::Map(None),
+                                    ValueType::Null => ParserMapKeySchema::Any,
+                                }
+                            } else {
+                                ParserMapKeySchema::Any
+                            };
+                            scope.add_key_to_source_schema(key, key_schema);
+                        }
+                    }
+                }
 
                 expressions.push(TransformExpression::Set(SetTransformExpression::new(
                     query_location,
@@ -176,6 +262,33 @@ pub(crate) fn parse_project_keep_expression(
         }
     }
 
+    // Remove keys NOT in the keep list from schema in Dynamic mode
+    let should_update_schema = if let Some(schema) = scope.get_source_schema() {
+        schema.get_validation_mode() == SchemaValidationMode::Dynamic
+    } else {
+        false
+    };
+    
+    if should_update_schema {
+        // Collect keys to keep
+        let mut keys_to_keep: HashSet<Box<str>> = HashSet::new();
+        for key in &reduction.keys {
+            keys_to_keep.insert(key.get_value().into());
+        }
+        
+        // Get all existing keys from schema and remove those not in keep list
+        if let Some(schema) = scope.get_source_schema() {
+            let all_keys: Vec<Box<str>> = schema.get_schema().keys().map(|k| k.clone()).collect();
+            drop(schema);
+            
+            for key in all_keys {
+                if !keys_to_keep.contains(&key) {
+                    scope.remove_key_from_source_schema(&key);
+                }
+            }
+        }
+    }
+
     push_map_transformation_expression(
         "project-keep",
         scope,
@@ -251,6 +364,19 @@ pub(crate) fn parse_project_away_expression(
         }
     }
 
+    // Remove keys from schema in Dynamic mode
+    let should_remove = if let Some(schema) = scope.get_source_schema() {
+        schema.get_validation_mode() == SchemaValidationMode::Dynamic
+    } else {
+        false
+    };
+    
+    if should_remove {
+        for key in &reduction.keys {
+            scope.remove_key_from_source_schema(key.get_value());
+        }
+    }
+
     push_map_transformation_expression(
         "project-away",
         scope,
@@ -278,6 +404,45 @@ pub(crate) fn parse_project_rename_expression(
             Rule::assignment_expression => {
                 let e = parse_source_assignment_expression(rule, scope)?;
                 if let ScalarExpression::Source(s) = e.1 {
+                    // If there is a schema defined and using Dynamic mode
+                    if let Some(schema) = scope.get_source_schema() {
+                        if schema.get_validation_mode() == SchemaValidationMode::Dynamic {
+                            if let Some(first_selector) = e.2.get_value_accessor().get_selectors().first() {
+                                if let ScalarExpression::Static(StaticScalarExpression::String(dest_key)) = first_selector {
+                                    let dest_key_name = dest_key.get_value();
+                                    
+                                    // Get source key name for removal
+                                    let mut src_key_name_opt = None;
+                                    if let Some(src_selector) = s.get_value_accessor().get_selectors().first() {
+                                        if let ScalarExpression::Static(StaticScalarExpression::String(src_key)) = src_selector {
+                                            src_key_name_opt = Some(src_key.get_value());
+                                        }
+                                    }
+                                    
+                                    // Only add destination key if it doesn't already exist
+                                    if schema.get_schema_for_key(dest_key_name).is_none() {
+                                        // Try to infer type from source key if it exists
+                                        let key_schema = if let Some(src_key_name) = src_key_name_opt {
+                                            schema.get_schema_for_key(src_key_name)
+                                                .cloned()
+                                                .unwrap_or(crate::ParserMapKeySchema::Any)
+                                        } else {
+                                            crate::ParserMapKeySchema::Any
+                                        };
+                                        drop(schema);
+                                        scope.add_key_to_source_schema(dest_key_name, key_schema);
+                                    } else {
+                                        drop(schema);
+                                    }
+                                    
+                                    // Always remove the source key
+                                    if let Some(src_key_name) = src_key_name_opt {
+                                        scope.remove_key_from_source_schema(src_key_name);
+                                    }
+                                }
+                            }
+                        }
+                    }
                     expressions.push((e.0, s, e.2));
                 } else {
                     return Err(ParserError::SyntaxError(
@@ -472,6 +637,75 @@ pub(crate) fn parse_summarize_expression(
             "Invalid summarize operator: missing both aggregates and group-by expressions".into(),
         ))
     } else {
+        // If there is a summary schema defined and using Dynamic mode
+        let should_update_schema = if let Some(schema) = scope.get_summary_schema() {
+            schema.get_validation_mode() == SchemaValidationMode::Dynamic
+        } else {
+            false
+        };
+
+        if should_update_schema {
+            // Add aggregation expression keys
+            for (key, agg_expr) in &aggregation_expressions {
+                // Infer type from aggregation expression
+                let key_schema = match agg_expr.get_aggregation_function() {
+                    AggregationFunction::Count => ParserMapKeySchema::Integer,
+                    AggregationFunction::Sum | AggregationFunction::Minimum | AggregationFunction::Maximum => {
+                        if let Some(value_expr) = agg_expr.get_value_expression() {
+                            if let Ok(Some(value_type)) = scope.try_resolve_value_type(&mut value_expr.clone()) {
+                                match value_type {
+                                    ValueType::Integer => ParserMapKeySchema::Integer,
+                                    ValueType::Double => ParserMapKeySchema::Double,
+                                    ValueType::TimeSpan => ParserMapKeySchema::TimeSpan,
+                                    ValueType::DateTime => ParserMapKeySchema::DateTime,
+                                    _ => ParserMapKeySchema::Any,
+                                }
+                            } else {
+                                ParserMapKeySchema::Any
+                            }
+                        } else {
+                            ParserMapKeySchema::Any
+                        }
+                    }
+                    AggregationFunction::Average => {
+                        if let Some(value_expr) = agg_expr.get_value_expression() {
+                            if let Ok(Some(value_type)) = scope.try_resolve_value_type(&mut value_expr.clone()) {
+                                match value_type {
+                                    ValueType::Integer | ValueType::Double => ParserMapKeySchema::Double,
+                                    _ => ParserMapKeySchema::Any,
+                                }
+                            } else {
+                                ParserMapKeySchema::Any
+                            }
+                        } else {
+                            ParserMapKeySchema::Any
+                        }
+                    }
+                };
+                scope.add_key_to_summary_schema(key.as_ref(), key_schema);
+            }
+
+            // Add group-by expression keys with type inference
+            for (key, scalar_expr) in &group_by_expressions {
+                let key_schema = if let Ok(Some(value_type)) = scope.try_resolve_value_type(&mut scalar_expr.clone()) {
+                    match value_type {
+                        ValueType::Boolean => ParserMapKeySchema::Boolean,
+                        ValueType::Integer => ParserMapKeySchema::Integer,
+                        ValueType::Double => ParserMapKeySchema::Double,
+                        ValueType::String => ParserMapKeySchema::String,
+                        ValueType::TimeSpan => ParserMapKeySchema::TimeSpan,
+                        ValueType::DateTime => ParserMapKeySchema::DateTime,
+                        ValueType::Map => ParserMapKeySchema::Map(None),
+                        ValueType::Array => ParserMapKeySchema::Array,
+                        ValueType::Null | ValueType::Regex => ParserMapKeySchema::Any,
+                    }
+                } else {
+                    ParserMapKeySchema::Any
+                };
+                scope.add_key_to_summary_schema(key.as_ref(), key_schema);
+            }
+        }
+
         let mut summary = SummaryDataExpression::new(
             query_location,
             group_by_expressions,
@@ -632,7 +866,7 @@ fn parse_identifier_or_pattern_literal(
         } else if let Some((default_map_key, default_map_schema)) = schema.get_default_map() {
             if let Some(default_map_schema) = default_map_schema
                 && let None = default_map_schema.get_schema_for_key(&value)
-                && !default_map_schema.get_allow_undefined_keys()
+                && default_map_schema.get_validation_mode() == SchemaValidationMode::Static
             {
                 Err(ParserError::QueryLanguageDiagnostic {
                     location,
@@ -649,7 +883,8 @@ fn parse_identifier_or_pattern_literal(
                     )),
                 }))
             }
-        } else if schema.get_allow_undefined_keys() {
+        } else if schema.get_validation_mode() != SchemaValidationMode::Static
+        {
             Ok(Some(IdentifierOrPattern::Identifier(
                 StringScalarExpression::new(location, &value),
             )))
@@ -696,7 +931,9 @@ pub(crate) fn validate_summary_identifier(
             } else {
                 Ok(full_identifier)
             }
-        } else if schema.get_allow_undefined_keys() {
+        } else if schema.get_validation_mode() == SchemaValidationMode::None
+            || schema.get_validation_mode() == SchemaValidationMode::Dynamic
+        {
             Ok(full_identifier)
         } else {
             Err(ParserError::QueryLanguageDiagnostic {
@@ -904,10 +1141,10 @@ fn push_map_transformation_expression(
                 let default_source_map = schema.get_default_map();
                 let mut default_source_map_matched_regex = false;
 
-                if !schema.get_allow_undefined_keys() {
+                if schema.get_validation_mode() == SchemaValidationMode::Static {
                     // Note: If we have schema we can apply the regex patterns ahead
                     // of time.
-                    foreach_source_schema_key(schema, |k| {
+                    foreach_source_schema_key(&*schema, |k| {
                         for p in &reduction.patterns {
                             if p.get_value().is_match(k) {
                                 if let Some((default_source_map_key, _)) = default_source_map
@@ -937,10 +1174,10 @@ fn push_map_transformation_expression(
                     // whole map will be removed.
                     if retain || !default_source_map_matched_regex {
                         if let Some(schema) = default_source_map_schema
-                            && !schema.get_allow_undefined_keys()
+                            && schema.get_validation_mode() == SchemaValidationMode::Static
                         {
                             //Note: If we have schema we can run the regex ahead of time.
-                            foreach_source_schema_key(schema, |k| {
+                            foreach_source_schema_key(&*schema, |k| {
                                 for p in &reduction.patterns {
                                     if p.get_value().is_match(k) {
                                         reduction.selectors.push(SourceScalarExpression::new(
@@ -1135,7 +1372,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_identifier_or_pattern_literal_with_schema_allow_undefined_keys() {
+    fn test_parse_identifier_or_pattern_literal_with_schema_and_validation_mode_none() {
         let run_test_success = |input: &str, expected: Option<IdentifierOrPattern>| {
             let state = ParserState::new_with_options(
                 input,
@@ -1143,7 +1380,7 @@ mod tests {
                     .with_source_map_schema(
                         ParserMapSchema::new()
                             .with_key_definition("int_value", ParserMapKeySchema::Integer)
-                            .set_allow_undefined_keys(),
+                            .set_validation_mode(SchemaValidationMode::None),
                     )
                     .with_attached_data_names(&["resource"]),
             );
@@ -1272,7 +1509,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_identifier_or_pattern_literal_with_default_map_schema_allow_undefined_keys() {
+    fn test_parse_identifier_or_pattern_literal_with_default_map_schema_and_validation_mode_none() {
         let run_test_success = |input: &str, expected: Option<IdentifierOrPattern>| {
             let state = ParserState::new_with_options(
                 input,
@@ -1288,7 +1525,7 @@ mod tests {
                                             "int_value",
                                             ParserMapKeySchema::Integer,
                                         )
-                                        .set_allow_undefined_keys(),
+                                        .set_validation_mode(SchemaValidationMode::None),
                                 )),
                             ),
                     )
@@ -1479,6 +1716,46 @@ mod tests {
                     )]),
                 )),
             ))],
+        );
+    }
+
+    #[test]
+    fn test_parse_extend_expression_with_dynamic_schema() {
+        let input = "extend foo = 'bar', num = 42, copy = existing_key";
+        
+        let state = ParserState::new_with_options(
+            input,
+            ParserOptions::new().with_source_map_schema(
+                ParserMapSchema::new()
+                    .with_key_definition("existing_key", ParserMapKeySchema::String)
+                    .set_validation_mode(SchemaValidationMode::Dynamic),
+            ),
+        );
+
+        let mut result = KqlPestParser::parse(Rule::extend_expression, input).unwrap();
+        let _expression = parse_extend_expression(result.next().unwrap(), &state).unwrap();
+
+        let schema = state.get_source_schema().unwrap();
+        
+        assert_eq!(
+            schema.get_schema_for_key("existing_key"),
+            Some(&ParserMapKeySchema::String),
+            "Key 'existing_key' should remain in schema with String type"
+        );
+        assert_eq!(
+            schema.get_schema_for_key("foo"),
+            Some(&ParserMapKeySchema::String),
+            "Key 'foo' should be added to schema with String type"
+        );
+        assert_eq!(
+            schema.get_schema_for_key("num"),
+            Some(&ParserMapKeySchema::Integer),
+            "Key 'num' should be added to schema with Integer type"
+        );
+        assert_eq!(
+            schema.get_schema_for_key("copy"),
+            Some(&ParserMapKeySchema::String),
+            "Key 'copy' should be added to schema with String type"
         );
     }
 
@@ -2852,7 +3129,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_project_away_expression_with_schema_allow_undefined_keys() {
+    fn test_parse_project_away_expression_with_schema_and_validation_mode_none() {
         let run_test_success = |input: &str, expected: Vec<TransformExpression>| {
             let state = ParserState::new_with_options(
                 input,
@@ -2872,7 +3149,7 @@ mod tests {
                                             "double_value",
                                             ParserMapKeySchema::Double,
                                         )
-                                        .set_allow_undefined_keys(),
+                                        .set_validation_mode(SchemaValidationMode::None),
                                 )),
                             ),
                     )
@@ -2887,7 +3164,7 @@ mod tests {
         };
 
         // Note: In this case the regex is not pre-applied because we don't know
-        // the full schema due to allow_undefined_keys being enabled.
+        // the full schema due to validation_mode_none being enabled.
         run_test_success(
             "project-away int*",
             vec![TransformExpression::ReduceMap(
@@ -2936,6 +3213,106 @@ mod tests {
                     ))],
                 )),
             )],
+        );
+    }
+
+    #[test]
+    fn test_parse_project_away_expression_with_dynamic_schema() {
+        let input = "project-away key2, key3";
+        
+        let state = ParserState::new_with_options(
+            input,
+            ParserOptions::new().with_source_map_schema(
+                ParserMapSchema::new()
+                    .with_key_definition("key1", ParserMapKeySchema::String)
+                    .with_key_definition("key2", ParserMapKeySchema::Integer)
+                    .with_key_definition("key3", ParserMapKeySchema::Double)
+                    .set_validation_mode(SchemaValidationMode::Dynamic),
+            ),
+        );
+
+        let mut result = KqlPestParser::parse(Rule::project_away_expression, input).unwrap();
+        parse_project_away_expression(result.next().unwrap(), &state).unwrap();
+
+        let schema = state.get_source_schema().unwrap();
+        assert_eq!(schema.get_schema_for_key("key1"), Some(&ParserMapKeySchema::String), "key1 should remain in schema with String type");
+        assert!(schema.get_schema_for_key("key2").is_none(), "key2 should be removed");
+        assert!(schema.get_schema_for_key("key3").is_none(), "key3 should be removed");
+    }
+
+    #[test]
+    fn test_parse_project_expression_with_dynamic_schema() {
+        let input = "project existing_key, new_field = 123, another = 'test'";
+        
+        let state = ParserState::new_with_options(
+            input,
+            ParserOptions::new().with_source_map_schema(
+                ParserMapSchema::new()
+                    .with_key_definition("existing_key", ParserMapKeySchema::String)
+                    .set_validation_mode(SchemaValidationMode::Dynamic),
+            ),
+        );
+
+        let mut result = KqlPestParser::parse(Rule::project_expression, input).unwrap();
+        let _expression = parse_project_expression(result.next().unwrap(), &state).unwrap();
+
+        let schema = state.get_source_schema().unwrap();
+        
+        assert_eq!(
+            schema.get_schema_for_key("existing_key"),
+            Some(&ParserMapKeySchema::String),
+            "Key 'existing_key' should remain in schema with String type"
+        );
+        assert_eq!(
+            schema.get_schema_for_key("new_field"),
+            Some(&ParserMapKeySchema::Integer),
+            "Key 'new_field' should be added to schema with Integer type"
+        );
+        assert_eq!(
+            schema.get_schema_for_key("another"),
+            Some(&ParserMapKeySchema::String),
+            "Key 'another' should be added to schema with String type"
+        );
+    }
+
+    #[test]
+    fn test_parse_project_keep_expression_with_dynamic_schema() {
+        let input = "project-keep key1, key2";
+        
+        let state = ParserState::new_with_options(
+            input,
+            ParserOptions::new().with_source_map_schema(
+                ParserMapSchema::new()
+                    .with_key_definition("key1", ParserMapKeySchema::String)
+                    .with_key_definition("key2", ParserMapKeySchema::Integer)
+                    .with_key_definition("key3", ParserMapKeySchema::Double)
+                    .with_key_definition("key4", ParserMapKeySchema::Boolean)
+                    .set_validation_mode(SchemaValidationMode::Dynamic),
+            ),
+        );
+
+        let mut result = KqlPestParser::parse(Rule::project_keep_expression, input).unwrap();
+        parse_project_keep_expression(result.next().unwrap(), &state).unwrap();
+
+        let schema = state.get_source_schema().unwrap();
+        
+        assert_eq!(
+            schema.get_schema_for_key("key1"),
+            Some(&ParserMapKeySchema::String),
+            "key1 should remain in schema (kept)"
+        );
+        assert_eq!(
+            schema.get_schema_for_key("key2"),
+            Some(&ParserMapKeySchema::Integer),
+            "key2 should remain in schema (kept)"
+        );
+        assert!(
+            schema.get_schema_for_key("key3").is_none(),
+            "key3 should be removed (not in keep list)"
+        );
+        assert!(
+            schema.get_schema_for_key("key4").is_none(),
+            "key4 should be removed (not in keep list)"
         );
     }
 
@@ -3124,6 +3501,45 @@ mod tests {
         run_test_failure(
             "project-rename A = variable",
             "To be valid in a project-rename expression 'A = variable' should be an accessor expression which refers to data on the source",
+        );
+    }
+
+    #[test]
+    fn test_parse_project_rename_expression_with_dynamic_schema() {
+        let input = "project-rename existing_key = old_key, new_name = another_old_key";
+        
+        let state = ParserState::new_with_options(
+            input,
+            ParserOptions::new().with_source_map_schema(
+                ParserMapSchema::new()
+                    .with_key_definition("old_key", ParserMapKeySchema::Integer)
+                    .with_key_definition("another_old_key", ParserMapKeySchema::String)
+                    .with_key_definition("existing_key", ParserMapKeySchema::Double)
+                    .set_validation_mode(SchemaValidationMode::Dynamic),
+            ),
+        );
+
+        let mut result = KqlPestParser::parse(Rule::project_rename_expression, input).unwrap();
+        let _expression = parse_project_rename_expression(result.next().unwrap(), &state).unwrap();
+
+        let schema = state.get_source_schema().unwrap();
+
+        assert_eq!(
+            schema.get_schema_for_key("existing_key"), 
+            Some(&ParserMapKeySchema::Double), 
+            "Key 'existing_key' should remain in schema with Double type");
+        assert_eq!(
+            schema.get_schema_for_key("new_name"),
+            Some(&ParserMapKeySchema::String),
+            "Key 'new_name' should be added to schema with String type from source key"
+        );
+        assert!(
+            schema.get_schema_for_key("old_key").is_none(),
+            "Old key 'old_key' should be removed from schema"
+        );
+        assert!(
+            schema.get_schema_for_key("another_old_key").is_none(),
+            "Old key 'another_old_key' should be removed from schema"
         );
     }
 
@@ -3843,14 +4259,14 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_summarize_expression_with_schema_allow_undefined_keys() {
+    fn test_parse_summarize_expression_with_schema_and_validation_mode_none() {
         let run_test_success = |input: &str, expected: SummaryDataExpression| {
             let state = ParserState::new_with_options(
                 input,
                 ParserOptions::new().with_summary_map_schema(
                     ParserMapSchema::new()
                         .with_key_definition("key1", ParserMapKeySchema::Any)
-                        .set_allow_undefined_keys(),
+                        .set_validation_mode(SchemaValidationMode::None),
                 ),
             );
 
@@ -3899,6 +4315,62 @@ mod tests {
                 )]),
                 HashMap::new(),
             ),
+        );
+    }
+
+    #[test]
+    fn test_parse_summarize_expression_with_dynamic_schema() {
+        let input = "summarize total = count(), sum_value = sum(int_field), avg_value = avg(int_field), max_val = max(double_field) by category, region";
+        
+        let state = ParserState::new_with_options(
+            input,
+            ParserOptions::new()
+                .with_source_map_schema(
+                    ParserMapSchema::new()
+                        .with_key_definition("int_field", ParserMapKeySchema::Integer)
+                        .with_key_definition("double_field", ParserMapKeySchema::Double)
+                        .with_key_definition("category", ParserMapKeySchema::String)
+                        .with_key_definition("region", ParserMapKeySchema::String)
+                        .set_validation_mode(SchemaValidationMode::Static),
+                )
+                .with_summary_map_schema(
+                    ParserMapSchema::new()
+                        .set_validation_mode(SchemaValidationMode::Dynamic),
+                ),
+        );
+
+        let mut result = KqlPestParser::parse(Rule::summarize_expression, input).unwrap();
+        let _expression = parse_summarize_expression(result.next().unwrap(), &state).unwrap();
+
+        let schema = state.get_summary_schema().unwrap();
+        
+        assert_eq!(
+            schema.get_schema_for_key("total"),
+            Some(&ParserMapKeySchema::Integer),
+            "count() should return Integer"
+        );
+        assert_eq!(
+            schema.get_schema_for_key("sum_value"),
+            Some(&ParserMapKeySchema::Integer),
+            "sum() of Integer field should return Integer"
+        );
+        assert_eq!(
+            schema.get_schema_for_key("avg_value"),
+            Some(&ParserMapKeySchema::Double),
+            "average() should always return Double"
+        );
+        assert_eq!(
+            schema.get_schema_for_key("max_val"),
+            Some(&ParserMapKeySchema::Double),
+            "max() of Double field should return Double"
+        );
+        assert!(
+            schema.get_schema_for_key("category").is_some(),
+            "Group-by key 'category' should be added to summary schema"
+        );
+        assert!(
+            schema.get_schema_for_key("region").is_some(),
+            "Group-by key 'region' should be added to summary schema"
         );
     }
 

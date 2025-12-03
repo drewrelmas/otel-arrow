@@ -660,7 +660,9 @@ pub(crate) fn parse_accessor_expression(
                                 StringScalarExpression::new(root_location, default_map_key),
                             )),
                         );
-                    } else if schema.get_allow_undefined_keys() {
+                    } else if schema.get_validation_mode() == SchemaValidationMode::None
+                        || schema.get_validation_mode() == SchemaValidationMode::Dynamic
+                    {
                         value_accessor.insert_selector(
                             0,
                             ScalarExpression::Static(StaticScalarExpression::String(
@@ -2297,7 +2299,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_accessor_expression_with_default_map_schema_and_allow_undefined_keys() {
+    fn test_parse_accessor_expression_with_default_map_schema_and_validation_mode_none() {
         let run_test_success = |input: &str, expected: ScalarExpression| {
             let mut result = KqlPestParser::parse(Rule::accessor_expression, input).unwrap();
 
@@ -2311,7 +2313,7 @@ mod tests {
                             ParserMapKeySchema::Map(Some(
                                 ParserMapSchema::new()
                                     .with_key_definition("double_value", ParserMapKeySchema::Double)
-                                    .set_allow_undefined_keys(),
+                                    .set_validation_mode(SchemaValidationMode::None),
                             )),
                         ),
                 ),
@@ -2430,7 +2432,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_accessor_expression_with_schema_allow_undefined_keys() {
+    fn test_parse_accessor_expression_with_schema_and_validation_mode_none() {
         let run_test_success = |input: &str, expected: ScalarExpression| {
             let mut result = KqlPestParser::parse(Rule::accessor_expression, input).unwrap();
 
@@ -2439,7 +2441,7 @@ mod tests {
                 ParserOptions::new().with_source_map_schema(
                     ParserMapSchema::new()
                         .with_key_definition("int_value", ParserMapKeySchema::Integer)
-                        .set_allow_undefined_keys(),
+                        .set_validation_mode(SchemaValidationMode::None),
                 ),
             );
 
