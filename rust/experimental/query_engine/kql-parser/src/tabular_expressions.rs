@@ -651,6 +651,16 @@ pub(crate) fn parse_summarize_expression(
         };
 
         if should_update_schema {
+            // Clear all existing keys from the summary schema first
+            // Summarize creates a completely new output structure
+            if let Some(schema) = scope.get_summary_schema() {
+                let keys_to_remove: Vec<Box<str>> = schema.get_schema().keys().cloned().collect();
+                drop(schema); // Release the borrow before modifying
+                for key in keys_to_remove {
+                    scope.remove_key_from_summary_schema(&key);
+                }
+            }
+
             // Add aggregation expression keys
             for (key, agg_expr) in &aggregation_expressions {
                 // Infer type from aggregation expression
@@ -4445,10 +4455,14 @@ mod tests {
                         .with_key_definition("double_field", ParserMapKeySchema::Double)
                         .with_key_definition("category", ParserMapKeySchema::String)
                         .with_key_definition("region", ParserMapKeySchema::String)
-                        .set_validation_mode(SchemaValidationMode::Static),
+                        .set_validation_mode(SchemaValidationMode::Dynamic),
                 )
                 .with_summary_map_schema(
                     ParserMapSchema::new()
+                        .with_key_definition("int_field", ParserMapKeySchema::Integer)
+                        .with_key_definition("double_field", ParserMapKeySchema::Double)
+                        .with_key_definition("category", ParserMapKeySchema::String)
+                        .with_key_definition("region", ParserMapKeySchema::String)
                         .set_validation_mode(SchemaValidationMode::Dynamic),
                 ),
         );
@@ -4458,6 +4472,16 @@ mod tests {
 
         let schema = state.get_summary_schema().unwrap();
         
+        assert_eq!(
+            schema.get_schema_for_key("int_field"),
+            None,
+            "int_field should be removed"
+        );
+        assert_eq!(
+            schema.get_schema_for_key("double_field"),
+            None,
+            "double_field should be removed"
+        );
         assert_eq!(
             schema.get_schema_for_key("total"),
             Some(&ParserMapKeySchema::Integer),
