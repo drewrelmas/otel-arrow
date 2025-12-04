@@ -92,7 +92,7 @@ fn parser_map_schema_from_json(
             }
         },
         "options": {
-            "allow_undefined_keys": true // default if not specified is false
+            "schema_validation_mode": "Dynamic" // Can be "Static", "Dynamic", or "Permissive". Default is "Static".
         }
     }
     */
@@ -155,10 +155,14 @@ fn parser_map_schema_from_json(
                 let mut schema = parse_schema(schema)?;
 
                 if let Some(serde_json::Value::Object(options)) = o.get("options") {
-                    if let Some(serde_json::Value::Bool(b)) = options.get("allow_undefined_keys")
-                        && *b
-                    {
-                        schema = schema.set_allow_undefined_keys();
+                    if let Some(serde_json::Value::String(mode_str)) = options.get("schema_validation_mode") {
+                        let mode = match mode_str.as_str() {
+                            "Static" => SchemaValidationMode::Static,
+                            "Dynamic" => SchemaValidationMode::Dynamic,
+                            "Permissive" => SchemaValidationMode::Permissive,
+                            _ => return Err(format!("Invalid validation_mode: {}", mode_str)),
+                        };
+                        schema = schema.with_schema_validation_mode(mode);
                     }
                 } else {
                     return Err("Options was not a map".into());
@@ -269,7 +273,7 @@ mod tests {
     }
 
     #[test]
-    fn test_bridge_options_from_json_with_allow_undefined_keys() {
+    fn test_bridge_options_from_json_with_dynamic_schema() {
         let run_test = |json: &str, expected: BridgeOptions| {
             let actual = BridgeOptions::from_json(json).unwrap();
 
@@ -283,14 +287,14 @@ mod tests {
                         "double_key": "Double"
                     },
                     "options": {
-                        "allow_undefined_keys": true
+                        "schema_validation_mode": "Dynamic"
                     }
                 }
             }"#,
             BridgeOptions::new().with_attributes_schema(
                 ParserMapSchema::new()
                     .with_key_definition("double_key", ParserMapKeySchema::Double)
-                    .set_allow_undefined_keys(),
+                    .with_schema_validation_mode(SchemaValidationMode::Dynamic),
             ),
         );
     }

@@ -632,7 +632,7 @@ fn parse_identifier_or_pattern_literal(
         } else if let Some((default_map_key, default_map_schema)) = schema.get_default_map() {
             if let Some(default_map_schema) = default_map_schema
                 && let None = default_map_schema.get_schema_for_key(&value)
-                && !default_map_schema.get_allow_undefined_keys()
+                && default_map_schema.get_schema_validation_mode() == SchemaValidationMode::Static
             {
                 Err(ParserError::QueryLanguageDiagnostic {
                     location,
@@ -649,7 +649,7 @@ fn parse_identifier_or_pattern_literal(
                     )),
                 }))
             }
-        } else if schema.get_allow_undefined_keys() {
+        } else if schema.get_schema_validation_mode() == SchemaValidationMode::Permissive {
             Ok(Some(IdentifierOrPattern::Identifier(
                 StringScalarExpression::new(location, &value),
             )))
@@ -696,7 +696,7 @@ pub(crate) fn validate_summary_identifier(
             } else {
                 Ok(full_identifier)
             }
-        } else if schema.get_allow_undefined_keys() {
+        } else if schema.get_schema_validation_mode() == SchemaValidationMode::Permissive {
             Ok(full_identifier)
         } else {
             Err(ParserError::QueryLanguageDiagnostic {
@@ -904,7 +904,7 @@ fn push_map_transformation_expression(
                 let default_source_map = schema.get_default_map();
                 let mut default_source_map_matched_regex = false;
 
-                if !schema.get_allow_undefined_keys() {
+                if schema.get_schema_validation_mode() == SchemaValidationMode::Static {
                     // Note: If we have schema we can apply the regex patterns ahead
                     // of time.
                     foreach_source_schema_key(schema, |k| {
@@ -937,7 +937,7 @@ fn push_map_transformation_expression(
                     // whole map will be removed.
                     if retain || !default_source_map_matched_regex {
                         if let Some(schema) = default_source_map_schema
-                            && !schema.get_allow_undefined_keys()
+                            && schema.get_schema_validation_mode() == SchemaValidationMode::Static
                         {
                             //Note: If we have schema we can run the regex ahead of time.
                             foreach_source_schema_key(schema, |k| {
@@ -1135,7 +1135,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_identifier_or_pattern_literal_with_schema_allow_undefined_keys() {
+    fn test_parse_identifier_or_pattern_literal_with_permissive_schema() {
         let run_test_success = |input: &str, expected: Option<IdentifierOrPattern>| {
             let state = ParserState::new_with_options(
                 input,
@@ -1143,7 +1143,7 @@ mod tests {
                     .with_source_map_schema(
                         ParserMapSchema::new()
                             .with_key_definition("int_value", ParserMapKeySchema::Integer)
-                            .set_allow_undefined_keys(),
+                            .with_schema_validation_mode(SchemaValidationMode::Permissive),
                     )
                     .with_attached_data_names(&["resource"]),
             );
@@ -1272,7 +1272,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_identifier_or_pattern_literal_with_default_map_schema_allow_undefined_keys() {
+    fn test_parse_identifier_or_pattern_literal_with_default_map_and_permissive_schema() {
         let run_test_success = |input: &str, expected: Option<IdentifierOrPattern>| {
             let state = ParserState::new_with_options(
                 input,
@@ -1288,7 +1288,7 @@ mod tests {
                                             "int_value",
                                             ParserMapKeySchema::Integer,
                                         )
-                                        .set_allow_undefined_keys(),
+                                        .with_schema_validation_mode(SchemaValidationMode::Permissive),
                                 )),
                             ),
                     )
@@ -2852,7 +2852,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_project_away_expression_with_schema_allow_undefined_keys() {
+    fn test_parse_project_away_expression_with_permissive_schema() {
         let run_test_success = |input: &str, expected: Vec<TransformExpression>| {
             let state = ParserState::new_with_options(
                 input,
@@ -2872,7 +2872,7 @@ mod tests {
                                             "double_value",
                                             ParserMapKeySchema::Double,
                                         )
-                                        .set_allow_undefined_keys(),
+                                        .with_schema_validation_mode(SchemaValidationMode::Permissive),
                                 )),
                             ),
                     )
@@ -3843,14 +3843,14 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_summarize_expression_with_schema_allow_undefined_keys() {
+    fn test_parse_summarize_expression_with_permissive_schema() {
         let run_test_success = |input: &str, expected: SummaryDataExpression| {
             let state = ParserState::new_with_options(
                 input,
                 ParserOptions::new().with_summary_map_schema(
                     ParserMapSchema::new()
                         .with_key_definition("key1", ParserMapKeySchema::Any)
-                        .set_allow_undefined_keys(),
+                        .with_schema_validation_mode(SchemaValidationMode::Permissive),
                 ),
             );
 

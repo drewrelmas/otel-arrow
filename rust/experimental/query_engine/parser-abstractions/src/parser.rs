@@ -92,7 +92,7 @@ impl Default for ParserOptions {
 pub struct ParserMapSchema {
     keys: HashMap<Box<str>, ParserMapKeySchema>,
     default_map_key: Option<Box<str>>,
-    allow_undefined_keys: bool,
+    schema_validation_mode: SchemaValidationMode,
 }
 
 impl ParserMapSchema {
@@ -100,7 +100,7 @@ impl ParserMapSchema {
         Self {
             keys: HashMap::new(),
             default_map_key: None,
-            allow_undefined_keys: false,
+            schema_validation_mode: SchemaValidationMode::Static,
         }
     }
 
@@ -114,8 +114,8 @@ impl ParserMapSchema {
     }
 
     pub fn set_default_map_key(mut self, name: &str) -> ParserMapSchema {
-        if self.allow_undefined_keys {
-            panic!("Default map cannot be specified when undefined keys is enabled");
+        if self.schema_validation_mode == SchemaValidationMode::Permissive {
+            panic!("Cannot set a default map key in permissive mode");
         }
         let definition = self
             .keys
@@ -128,11 +128,8 @@ impl ParserMapSchema {
         self
     }
 
-    pub fn set_allow_undefined_keys(mut self) -> ParserMapSchema {
-        if self.default_map_key.is_some() {
-            panic!("Undefined keys cannot be enabled when default map is specified");
-        }
-        self.allow_undefined_keys = true;
+    pub fn with_schema_validation_mode(mut self, mode: SchemaValidationMode) -> ParserMapSchema {
+        self.schema_validation_mode = mode;
         self
     }
 
@@ -158,8 +155,8 @@ impl ParserMapSchema {
         }
     }
 
-    pub fn get_allow_undefined_keys(&self) -> bool {
-        self.allow_undefined_keys
+    pub fn get_schema_validation_mode(&self) -> SchemaValidationMode {
+        self.schema_validation_mode
     }
 
     pub fn try_resolve_value_type(
@@ -216,7 +213,7 @@ impl ParserMapSchema {
                                 return Ok(key_schema.get_value_type());
                             }
                             None => {
-                                if self.allow_undefined_keys {
+                                if self.schema_validation_mode == SchemaValidationMode::Permissive {
                                     return Ok(None);
                                 }
                                 return Err(ParserError::KeyNotFound {
@@ -332,4 +329,14 @@ impl ParserResult {
     pub fn new(pipeline: PipelineExpression) -> Self {
         Self { pipeline }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SchemaValidationMode {
+    /// All keys referenced must exist in the schema and new keys cannot be defined in queries.
+    Static,
+    /// All keys referenced must exist in the schema. New keys may be defined in queries and will be added dynamically to schema.
+    Dynamic,
+    /// Keys do not need to exist in the schema. 
+    Permissive,
 }
