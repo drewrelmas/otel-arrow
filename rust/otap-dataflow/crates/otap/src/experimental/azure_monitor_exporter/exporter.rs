@@ -128,6 +128,11 @@ impl AzureMonitorExporter {
         self.stats.add_batch();
         self.stats.add_client_latency(duration.as_secs_f64());
 
+        println!(
+            "[AzureMonitorExporter] ✓ Export SUCCESS - batch_id={}, rows={}, msgs={}, sending ACKs upstream",
+            batch_id, row_count, completed_messages.len()
+        );
+
         for (_, context, payload) in completed_messages {
             effect_handler
                 .notify_ack(AckMsg::new(OtapPdata::new(context, payload)))
@@ -150,8 +155,12 @@ impl AzureMonitorExporter {
         self.stats.add_failed_batch();
 
         println!(
-            "[AzureMonitorExporter] Export failed: {:?} - {:?}",
-            batch_id, error
+            "[AzureMonitorExporter] ✗ Export FAILED - batch_id={}, rows={}, msgs={}, sending NACKs upstream to durable_buffer",
+            batch_id, row_count, failed_messages.len()
+        );
+        println!(
+            "[AzureMonitorExporter]   Error: {:?}",
+            error
         );
 
         for (_, context, payload) in failed_messages {

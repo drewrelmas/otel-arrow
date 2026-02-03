@@ -8,6 +8,11 @@ use reqwest::{
     Client,
     header::{AUTHORIZATION, CONTENT_ENCODING, CONTENT_TYPE, HeaderValue},
 };
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+// TEST: Simulate transient failures for durable buffer testing
+static EXPORT_COUNTER: AtomicUsize = AtomicUsize::new(0);
+const FAIL_FIRST_N_EXPORTS: usize = 5;
 use tokio::time::{Duration, Instant};
 
 use super::config::ApiConfig;
@@ -161,6 +166,21 @@ impl LogsIngestionClient {
     /// * `Ok(Duration)` - Total time spent (including retries) if successful
     /// * `Err(String)` - Error message if all retries exhausted or non-retryable error
     pub async fn export(&mut self, body: Bytes) -> Result<Duration, Error> {
+        // TEST: Inject transient failure for durable buffer testing
+        let export_count = EXPORT_COUNTER.fetch_add(1, Ordering::SeqCst);
+        if export_count < FAIL_FIRST_N_EXPORTS {
+            println!(
+                "[TEST] Simulating export failure {}/{}",
+                export_count + 1,
+                FAIL_FIRST_N_EXPORTS
+            );
+            return Err(Error::ServerError {
+                status: reqwest::StatusCode::INTERNAL_SERVER_ERROR,
+                body: format!("Simulated failure {}/{}", export_count + 1, FAIL_FIRST_N_EXPORTS),
+                retry_after: None,
+            });
+        }
+
         let mut attempt = 0u32;
         let mut rng = SmallRng::seed_from_u64(
             std::time::SystemTime::now()
