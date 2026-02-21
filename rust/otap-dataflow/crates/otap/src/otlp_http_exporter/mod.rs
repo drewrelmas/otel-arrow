@@ -662,7 +662,7 @@ mod test {
     use crate::otap_grpc::common::AckRegistry;
     use crate::otlp_http::client_settings::HttpClientSettings;
     use crate::otlp_http::{HttpServerSettings, serve, tune_max_concurrent_requests};
-    use crate::otlp_receiver::OtlpReceiverMetrics;
+    use crate::otlp_receiver_metrics::OtlpReceiverMetrics;
     use crate::testing::TestCallData;
 
     /// run test HTTP server serving OTLP HTTP API. Internally, this uses the OTLP HTTP server that

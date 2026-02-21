@@ -9,18 +9,18 @@
 //! ToDo: Implement proper deadline function for Shutdown ctrl msg
 //!
 
-use crate::OTAP_RECEIVER_FACTORIES;
-use crate::compression::CompressionMethod;
-use crate::otap_grpc::middleware::zstd_header::ZstdRequestHeaderAdapter;
-use crate::otap_grpc::otlp::server::{RouteResponse, SharedState};
-use crate::otap_grpc::{
-    ArrowLogsServiceImpl, ArrowMetricsServiceImpl, ArrowTracesServiceImpl, Settings,
-};
-use crate::pdata::OtapPdata;
-#[cfg(feature = "experimental-tls")]
-use crate::tls_utils::{build_tls_acceptor, create_tls_stream};
 #[cfg(feature = "experimental-tls")]
 use otap_df_config::tls::TlsServerConfig;
+use otap_df_otap::OTAP_RECEIVER_FACTORIES;
+use otap_df_otap::compression::CompressionMethod;
+use otap_df_otap::otap_grpc::middleware::zstd_header::ZstdRequestHeaderAdapter;
+use otap_df_otap::otap_grpc::otlp::server::{RouteResponse, SharedState};
+use otap_df_otap::otap_grpc::{
+    ArrowLogsServiceImpl, ArrowMetricsServiceImpl, ArrowTracesServiceImpl, Settings,
+};
+use otap_df_otap::pdata::OtapPdata;
+#[cfg(feature = "experimental-tls")]
+use otap_df_otap::tls_utils::{build_tls_acceptor, create_tls_stream};
 
 use async_trait::async_trait;
 use linkme::distributed_slice;
@@ -387,9 +387,7 @@ impl shared::Receiver<OtapPdata> for OTAPReceiver {
 
 #[cfg(test)]
 mod tests {
-    use crate::otap_mock::create_otap_batch;
-    use crate::otap_receiver::{OTAP_RECEIVER_URN, OTAPReceiver};
-    use crate::pdata::OtapPdata;
+    use super::{OTAP_RECEIVER_URN, OTAPReceiver};
     use async_stream::stream;
     use otap_df_config::node::NodeUserConfig;
     use otap_df_engine::control::{AckMsg, NackMsg, NodeControlMsg};
@@ -398,6 +396,8 @@ mod tests {
         receiver::{NotSendValidateContext, TestContext, TestRuntime},
         test_node,
     };
+    use otap_df_otap::pdata::{Context, OtapPdata};
+    use otap_df_otap::testing::create_otap_batch;
     use otap_df_pdata::Producer;
     use otap_df_pdata::otap::OtapArrowRecords;
     use otap_df_pdata::proto::opentelemetry::arrow::v1::{
@@ -542,9 +542,7 @@ mod tests {
                     assert!(matches!(metrics_records, _expected_metrics_message));
 
                     // Send ACK if wait_for_result is enabled
-                    if let Some((_node_id, ack)) =
-                        crate::pdata::Context::next_ack(AckMsg::new(metrics_pdata))
-                    {
+                    if let Some((_node_id, ack)) = Context::next_ack(AckMsg::new(metrics_pdata)) {
                         ctx.send_control_msg(NodeControlMsg::Ack(ack))
                             .await
                             .expect("Failed to send Ack for metrics");
@@ -570,9 +568,7 @@ mod tests {
                     assert!(matches!(logs_records, _expected_logs_message));
 
                     // Send ACK if wait_for_result is enabled
-                    if let Some((_node_id, ack)) =
-                        crate::pdata::Context::next_ack(AckMsg::new(logs_pdata))
-                    {
+                    if let Some((_node_id, ack)) = Context::next_ack(AckMsg::new(logs_pdata)) {
                         ctx.send_control_msg(NodeControlMsg::Ack(ack))
                             .await
                             .expect("Failed to send Ack for logs");
@@ -598,9 +594,7 @@ mod tests {
                     assert!(matches!(traces_records, _expected_traces_message));
 
                     // Send ACK if wait_for_result is enabled
-                    if let Some((_node_id, ack)) =
-                        crate::pdata::Context::next_ack(AckMsg::new(traces_pdata))
-                    {
+                    if let Some((_node_id, ack)) = Context::next_ack(AckMsg::new(traces_pdata)) {
                         ctx.send_control_msg(NodeControlMsg::Ack(ack))
                             .await
                             .expect("Failed to send Ack for traces");
@@ -732,7 +726,7 @@ mod tests {
                         .expect("No metrics received");
 
                     let nack = NackMsg::new("Test NACK reason for metrics", metrics_pdata);
-                    if let Some((_node_id, nack)) = crate::pdata::Context::next_nack(nack) {
+                    if let Some((_node_id, nack)) = Context::next_nack(nack) {
                         ctx.send_control_msg(NodeControlMsg::Nack(nack))
                             .await
                             .expect("Failed to send Nack for metrics");
@@ -747,7 +741,7 @@ mod tests {
                         .expect("No logs received");
 
                     let nack = NackMsg::new("Test NACK reason for logs", logs_pdata);
-                    if let Some((_node_id, nack)) = crate::pdata::Context::next_nack(nack) {
+                    if let Some((_node_id, nack)) = Context::next_nack(nack) {
                         ctx.send_control_msg(NodeControlMsg::Nack(nack))
                             .await
                             .expect("Failed to send Nack for logs");
@@ -762,7 +756,7 @@ mod tests {
                         .expect("No traces received");
 
                     let nack = NackMsg::new("Test NACK reason for traces", traces_pdata);
-                    if let Some((_node_id, nack)) = crate::pdata::Context::next_nack(nack) {
+                    if let Some((_node_id, nack)) = Context::next_nack(nack) {
                         ctx.send_control_msg(NodeControlMsg::Nack(nack))
                             .await
                             .expect("Failed to send Nack for traces");
@@ -877,7 +871,7 @@ mod tests {
 
     #[test]
     fn test_config_parsing() {
-        use crate::compression::CompressionMethod;
+        use otap_df_otap::compression::CompressionMethod;
         use serde_json::json;
 
         let telemetry_registry_handle = otap_df_telemetry::registry::TelemetryRegistryHandle::new();

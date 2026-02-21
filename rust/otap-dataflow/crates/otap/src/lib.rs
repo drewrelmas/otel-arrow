@@ -11,12 +11,6 @@ use otap_df_engine_macros::pipeline_factory;
 pub mod otap_exporter;
 /// gRPC service implementation
 pub mod otap_grpc;
-/// Implementation of OTAP Receiver that implements the receiver trait
-pub mod otap_receiver;
-
-/// This receiver receives OTLP bytes from the grpc service request and
-/// produce for the pipeline OTAP PData
-pub mod otlp_receiver;
 
 /// Implementation of OTLP exporter that implements the exporter trait
 pub mod otlp_exporter;
@@ -82,10 +76,13 @@ pub mod compression;
 
 pub mod metrics;
 
+/// Shared metric definitions for OTLP receiver data paths.
+pub mod otlp_receiver_metrics;
+
 pub(crate) mod socket_options;
 
 /// Shared concurrency limiting across protocol servers
-pub(crate) mod shared_concurrency;
+pub mod shared_concurrency;
 
 /// gRPC service implementation
 pub mod otlp_grpc;

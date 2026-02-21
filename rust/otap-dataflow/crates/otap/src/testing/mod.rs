@@ -4,6 +4,10 @@
 //! Ultra-minimal test utilities for OTAP components
 
 use crate::pdata::OtapPdata;
+use arrow::{
+    array::{RecordBatch, UInt16Array},
+    datatypes::{DataType, Field, Schema},
+};
 use bytes::Bytes;
 use otap_df_engine::testing::exporter::{TestRuntime, create_exporter_from_factory};
 use otap_df_engine::{
@@ -11,9 +15,13 @@ use otap_df_engine::{
     control::{CallData, PipelineControlMsg},
 };
 use otap_df_pdata::OtlpProtoBytes;
+use otap_df_pdata::otap::{Logs, Metrics, OtapArrowRecords, Traces};
+use otap_df_pdata::proto::opentelemetry::arrow::v1::ArrowPayloadType;
+use otap_df_pdata::schema::consts;
 use prost::Message;
 use serde_json::Value;
 use std::ops::Add;
+use std::sync::Arc;
 use std::time::Instant;
 
 /// TestCallData helps test the CallData type.
@@ -70,6 +78,34 @@ pub fn create_test_pdata() -> OtapPdata {
         .expect("failed to encode test OTLP ExportLogsServiceRequest");
 
     OtapPdata::new_default(OtlpProtoBytes::ExportLogsRequest(Bytes::from(otlp_bytes)).into())
+}
+
+/// Create a minimal OTAP arrow batch fixture for receiver/exporter tests.
+#[must_use]
+pub fn create_otap_batch(batch_id: i64, payload_type: ArrowPayloadType) -> OtapArrowRecords {
+    let record_batch = RecordBatch::try_new(
+        Arc::new(Schema::new(vec![Field::new(
+            consts::ID,
+            DataType::UInt16,
+            true,
+        )])),
+        vec![Arc::new(UInt16Array::from_iter_values(vec![
+            batch_id as u16,
+        ]))],
+    )
+    .expect("record batch should build");
+
+    let mut otap_batch = match payload_type {
+        ArrowPayloadType::Logs => OtapArrowRecords::Logs(Logs::default()),
+        ArrowPayloadType::Spans => OtapArrowRecords::Traces(Traces::default()),
+        ArrowPayloadType::UnivariateMetrics | ArrowPayloadType::MultivariateMetrics => {
+            OtapArrowRecords::Metrics(Metrics::default())
+        }
+        _ => panic!("unexpected payload_type"),
+    };
+
+    otap_batch.set(payload_type, record_batch);
+    otap_batch
 }
 
 /// Simple exporter test where there is NO subscribe_to() in the context.

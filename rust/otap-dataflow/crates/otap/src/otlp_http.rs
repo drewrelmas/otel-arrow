@@ -499,7 +499,7 @@ fn read_to_end_limited<R: std::io::Read>(
 struct HttpHandler {
     effect_handler: EffectHandler<OtapPdata>,
     ack_registry: AckRegistry,
-    metrics: Arc<Mutex<MetricSet<crate::otlp_receiver::OtlpReceiverMetrics>>>,
+    metrics: Arc<Mutex<MetricSet<crate::otlp_receiver_metrics::OtlpReceiverMetrics>>>,
     settings: HttpServerSettings,
     /// Optional global semaphore shared across protocols (e.g., gRPC + HTTP) to enforce
     /// receiver-wide backpressure tied to downstream capacity.
@@ -778,7 +778,7 @@ pub async fn serve(
     effect_handler: EffectHandler<OtapPdata>,
     settings: HttpServerSettings,
     ack_registry: AckRegistry,
-    metrics: Arc<Mutex<MetricSet<crate::otlp_receiver::OtlpReceiverMetrics>>>,
+    metrics: Arc<Mutex<MetricSet<crate::otlp_receiver_metrics::OtlpReceiverMetrics>>>,
     global_semaphore: Option<Arc<Semaphore>>,
     shutdown: CancellationToken,
 ) -> std::io::Result<()> {
@@ -973,7 +973,7 @@ mod tests {
         let pipeline_ctx =
             controller_ctx.pipeline_context_with("grp".into(), "pipeline".into(), 0, 1, 0);
         let metrics = Arc::new(Mutex::new(
-            pipeline_ctx.register_metrics::<crate::otlp_receiver::OtlpReceiverMetrics>(),
+            pipeline_ctx.register_metrics::<crate::otlp_receiver_metrics::OtlpReceiverMetrics>(),
         ));
 
         let ack_registry = AckRegistry::new(Some(AckSlot::new(4)), None, None);

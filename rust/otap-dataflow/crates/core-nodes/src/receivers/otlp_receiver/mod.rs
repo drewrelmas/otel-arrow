@@ -17,19 +17,15 @@
 //! Periodic telemetry snapshots update the `OtlpReceiverMetrics` counters, which focus on ACK/NACK
 //! behaviour today.
 
-use crate::OTAP_RECEIVER_FACTORIES;
-use crate::otap_grpc::otlp::server_new::{
+use otap_df_otap::OTAP_RECEIVER_FACTORIES;
+use otap_df_otap::otap_grpc::otlp::server_new::{
     LogsServiceServer, MetricsServiceServer, OtlpServerSettings, TraceServiceServer,
 };
-use crate::pdata::OtapPdata;
+use otap_df_otap::otlp_receiver_metrics::OtlpReceiverMetrics;
+use otap_df_otap::pdata::OtapPdata;
 #[cfg(feature = "experimental-tls")]
-use crate::tls_utils::{build_tls_acceptor, create_tls_stream};
+use otap_df_otap::tls_utils::{build_tls_acceptor, create_tls_stream};
 
-use crate::otap_grpc::common;
-use crate::otap_grpc::common::AckRegistry;
-use crate::otap_grpc::server_settings::GrpcServerSettings;
-use crate::otlp_http::HttpServerSettings;
-use crate::shared_concurrency::SharedConcurrencyLayer;
 use async_trait::async_trait;
 use linkme::distributed_slice;
 use otap_df_config::node::NodeUserConfig;
@@ -42,9 +38,12 @@ use otap_df_engine::node::NodeId;
 use otap_df_engine::receiver::ReceiverWrapper;
 use otap_df_engine::shared::receiver as shared;
 use otap_df_engine::terminal_state::TerminalState;
-use otap_df_telemetry::instrument::Counter;
+use otap_df_otap::otap_grpc::common;
+use otap_df_otap::otap_grpc::common::AckRegistry;
+use otap_df_otap::otap_grpc::server_settings::GrpcServerSettings;
+use otap_df_otap::otlp_http::HttpServerSettings;
+use otap_df_otap::shared_concurrency::SharedConcurrencyLayer;
 use otap_df_telemetry::metrics::MetricSet;
-use otap_df_telemetry_macros::metric_set;
 use parking_lot::Mutex;
 use serde::Deserialize;
 use serde_json::Value;
@@ -172,7 +171,7 @@ impl Protocols {
 ///
 /// Several optimisations keep the hot path inexpensive:
 /// - Incoming request bodies stay in their serialized OTLP form thanks to the custom
-///   [`OtlpBytesCodec`](crate::otap_grpc::otlp::server_new::OtlpBytesCodec), allowing downstream stages
+///   [`OtlpBytesCodec`](otap_df_otap::otap_grpc::otlp::server_new::OtlpBytesCodec), allowing downstream stages
 ///   to decode lazily.
 /// - `AckRegistry` maintains per-signal ACK subscription slots so `wait_for_result` lookups avoid
 ///   extra bookkeeping and route responses directly back to callers.
@@ -276,7 +275,7 @@ impl OTLPReceiver {
             common::tune_max_concurrent_requests(grpc, downstream_capacity);
         }
         if let Some(http) = self.config.protocols.http.as_mut() {
-            crate::otlp_http::tune_max_concurrent_requests(http, downstream_capacity);
+            otap_df_otap::otlp_http::tune_max_concurrent_requests(http, downstream_capacity);
         }
     }
 
@@ -314,12 +313,15 @@ impl OTLPReceiver {
             0
         };
 
-        let logs_slot = wait_for_result_any
-            .then(|| crate::otap_grpc::otlp::server_new::AckSlot::new(shared_ack_slot_capacity));
-        let metrics_slot = wait_for_result_any
-            .then(|| crate::otap_grpc::otlp::server_new::AckSlot::new(shared_ack_slot_capacity));
-        let traces_slot = wait_for_result_any
-            .then(|| crate::otap_grpc::otlp::server_new::AckSlot::new(shared_ack_slot_capacity));
+        let logs_slot = wait_for_result_any.then(|| {
+            otap_df_otap::otap_grpc::otlp::server_new::AckSlot::new(shared_ack_slot_capacity)
+        });
+        let metrics_slot = wait_for_result_any.then(|| {
+            otap_df_otap::otap_grpc::otlp::server_new::AckSlot::new(shared_ack_slot_capacity)
+        });
+        let traces_slot = wait_for_result_any.then(|| {
+            otap_df_otap::otap_grpc::otlp::server_new::AckSlot::new(shared_ack_slot_capacity)
+        });
 
         // Build gRPC service servers only if gRPC is enabled.
         let (logs_server, metrics_server, traces_server) = if let Some(settings) = grpc_settings {
@@ -422,53 +424,6 @@ impl OTLPReceiver {
             source_detail,
         }
     }
-}
-
-/// OTLP receiver metrics.
-//
-// TODO: The following were unused, would have to be implemented in
-// a different location:
-//
-// /// Number of bytes received.
-// #[metric(unit = "By")]
-// pub bytes_received: Counter<u64>,
-// /// Number of messages received.
-// #[metric(unit = "{msg}")]
-// pub messages_received: Counter<u64>,
-#[metric_set(name = "otlp.receiver.metrics")]
-#[derive(Debug, Default, Clone)]
-pub struct OtlpReceiverMetrics {
-    /// Number of acks received from downstream (routed back to the caller).
-    #[metric(unit = "{acks}")]
-    pub acks_received: Counter<u64>,
-
-    /// Number of nacks received from downstream (routed back to the caller).
-    #[metric(unit = "{nacks}")]
-    pub nacks_received: Counter<u64>,
-
-    /// Number of invalid/expired acks/nacks.
-    #[metric(unit = "{ack_or_nack}")]
-    pub acks_nacks_invalid_or_expired: Counter<u64>,
-
-    /// Number of OTLP RPCs started.
-    #[metric(unit = "{requests}")]
-    pub requests_started: Counter<u64>,
-
-    /// Number of OTLP RPCs completed (success + nack).
-    #[metric(unit = "{requests}")]
-    pub requests_completed: Counter<u64>,
-
-    /// Number of OTLP RPCs rejected before entering the pipeline (e.g. slot exhaustion).
-    #[metric(unit = "{requests}")]
-    pub rejected_requests: Counter<u64>,
-
-    /// Number of transport-level errors surfaced by tonic/server.
-    #[metric(unit = "{errors}")]
-    pub transport_errors: Counter<u64>,
-
-    /// Total bytes received across OTLP requests (payload bytes).
-    #[metric(unit = "By")]
-    pub request_bytes: Counter<u64>,
 }
 
 /// Type alias for the gRPC server future.
@@ -639,7 +594,7 @@ impl shared::Receiver<OtapPdata> for OTLPReceiver {
         let http_shutdown = CancellationToken::new();
         let http_task: Option<HttpServerTask> =
             if let Some(http_config) = self.config.protocols.http.clone() {
-                Some(Box::pin(crate::otlp_http::serve(
+                Some(Box::pin(otap_df_otap::otlp_http::serve(
                     effect_handler.clone(),
                     http_config,
                     ack_registry.clone(),
@@ -787,7 +742,6 @@ impl OTLPReceiver {
 mod tests {
     use super::*;
 
-    use crate::compression::CompressionMethod;
     use otap_df_config::node::NodeUserConfig;
     use otap_df_engine::context::ControllerContext;
     use otap_df_engine::control::NackMsg;
@@ -797,6 +751,7 @@ mod tests {
         receiver::{NotSendValidateContext, TestContext, TestRuntime},
         test_node,
     };
+    use otap_df_otap::compression::CompressionMethod;
     use otap_df_pdata::OtlpProtoBytes;
     use otap_df_pdata::proto::opentelemetry::collector::logs::v1::logs_service_client::LogsServiceClient;
     use otap_df_pdata::proto::opentelemetry::collector::logs::v1::{
@@ -830,6 +785,19 @@ mod tests {
     use hyper::header::{CONTENT_ENCODING, CONTENT_TYPE, HOST};
     use hyper_util::rt::TokioIo;
     use tokio::net::TcpStream;
+
+    // Duplicate of the wire-format status struct from `crates/otap/src/otlp_http.rs` tests.
+    // Keep local for now to avoid widening otap's public API surface just for tests.
+    // Once OTLP/OTAP exporters are moved too, consider a shared test-utils type.
+    #[derive(Clone, PartialEq, ::prost::Message)]
+    struct RpcStatusWire {
+        #[prost(int32, tag = "1")]
+        code: i32,
+        #[prost(string, tag = "2")]
+        message: String,
+        #[prost(message, repeated, tag = "3")]
+        details: Vec<prost_types::Any>,
+    }
 
     fn test_config(addr: SocketAddr) -> Config {
         let grpc = GrpcServerSettings {
@@ -1490,7 +1458,7 @@ mod tests {
 
                 // Send Ack back to unblock the gRPC handler
                 if let Some((_node_id, ack)) =
-                    crate::pdata::Context::next_ack(AckMsg::new(logs_pdata))
+                    otap_df_otap::pdata::Context::next_ack(AckMsg::new(logs_pdata))
                 {
                     ctx.send_control_msg(NodeControlMsg::Ack(ack))
                         .await
@@ -1521,7 +1489,7 @@ mod tests {
 
                 // Send Ack back to unblock the gRPC handler
                 if let Some((_node_id, ack)) =
-                    crate::pdata::Context::next_ack(AckMsg::new(metrics_pdata))
+                    otap_df_otap::pdata::Context::next_ack(AckMsg::new(metrics_pdata))
                 {
                     ctx.send_control_msg(NodeControlMsg::Ack(ack))
                         .await
@@ -1552,7 +1520,7 @@ mod tests {
 
                 // Send Ack back to unblock the gRPC handler
                 if let Some((_node_id, ack)) =
-                    crate::pdata::Context::next_ack(AckMsg::new(trace_pdata))
+                    otap_df_otap::pdata::Context::next_ack(AckMsg::new(trace_pdata))
                 {
                     ctx.send_control_msg(NodeControlMsg::Ack(ack))
                         .await
@@ -1681,7 +1649,7 @@ mod tests {
                 assert_eq!(&expected_bytes, logs_proto.as_bytes());
 
                 if let Some((_node_id, ack)) =
-                    crate::pdata::Context::next_ack(AckMsg::new(logs_pdata))
+                    otap_df_otap::pdata::Context::next_ack(AckMsg::new(logs_pdata))
                 {
                     ctx.send_control_msg(NodeControlMsg::Ack(ack))
                         .await
@@ -1773,7 +1741,7 @@ mod tests {
                 assert_eq!(&expected_bytes, logs_proto.as_bytes());
 
                 if let Some((_node_id, ack)) =
-                    crate::pdata::Context::next_ack(AckMsg::new(logs_pdata))
+                    otap_df_otap::pdata::Context::next_ack(AckMsg::new(logs_pdata))
                 {
                     ctx.send_control_msg(NodeControlMsg::Ack(ack))
                         .await
@@ -1991,7 +1959,7 @@ mod tests {
                     .expect("No logs message received");
 
                 if let Some((_node_id, ack)) =
-                    crate::pdata::Context::next_ack(AckMsg::new(logs_pdata))
+                    otap_df_otap::pdata::Context::next_ack(AckMsg::new(logs_pdata))
                 {
                     ctx.send_control_msg(NodeControlMsg::Ack(ack))
                         .await
@@ -2210,7 +2178,8 @@ mod tests {
 
                 tokio::time::sleep(Duration::from_millis(300)).await;
 
-                if let Some((_node_id, ack)) = crate::pdata::Context::next_ack(AckMsg::new(pdata1))
+                if let Some((_node_id, ack)) =
+                    otap_df_otap::pdata::Context::next_ack(AckMsg::new(pdata1))
                 {
                     ctx.send_control_msg(NodeControlMsg::Ack(ack))
                         .await
@@ -2223,7 +2192,8 @@ mod tests {
                     .expect("Timed out waiting for second message")
                     .expect("No second message received");
 
-                if let Some((_node_id, ack)) = crate::pdata::Context::next_ack(AckMsg::new(pdata2))
+                if let Some((_node_id, ack)) =
+                    otap_df_otap::pdata::Context::next_ack(AckMsg::new(pdata2))
                 {
                     ctx.send_control_msg(NodeControlMsg::Ack(ack))
                         .await
@@ -2307,7 +2277,7 @@ mod tests {
                     .expect("No logs message received");
 
                 if let Some((_node_id, ack)) =
-                    crate::pdata::Context::next_ack(AckMsg::new(logs_pdata))
+                    otap_df_otap::pdata::Context::next_ack(AckMsg::new(logs_pdata))
                 {
                     ctx.send_control_msg(NodeControlMsg::Ack(ack))
                         .await
@@ -2519,7 +2489,7 @@ mod tests {
                     .expect("No logs message received");
 
                 let nack = NackMsg::new("Test nack reason", logs_pdata);
-                if let Some((_node_id, nack)) = crate::pdata::Context::next_nack(nack) {
+                if let Some((_node_id, nack)) = otap_df_otap::pdata::Context::next_nack(nack) {
                     ctx.send_control_msg(NodeControlMsg::Nack(nack))
                         .await
                         .expect("Failed to send Nack");
@@ -2590,8 +2560,8 @@ mod tests {
                 assert!(!body.is_empty(), "Response body should contain NACK reason");
 
                 // Decode the RpcStatus response
-                let rpc_status = crate::otlp_http::RpcStatus::decode(body.as_ref())
-                    .expect("Should decode RpcStatus");
+                let rpc_status =
+                    RpcStatusWire::decode(body.as_ref()).expect("Should decode RpcStatus");
 
                 // Verify the NACK reason is included
                 assert_eq!(rpc_status.code, 14); // gRPC UNAVAILABLE code
@@ -2621,7 +2591,7 @@ mod tests {
                     .expect("No logs message received");
 
                 let nack = NackMsg::new("Test nack reason", logs_pdata);
-                if let Some((_node_id, nack)) = crate::pdata::Context::next_nack(nack) {
+                if let Some((_node_id, nack)) = otap_df_otap::pdata::Context::next_nack(nack) {
                     ctx.send_control_msg(NodeControlMsg::Nack(nack))
                         .await
                         .expect("Failed to send Nack");
@@ -2792,7 +2762,7 @@ mod tests {
                     .expect("No logs message received");
 
                 if let Some((_node_id, ack)) =
-                    crate::pdata::Context::next_ack(AckMsg::new(logs_pdata))
+                    otap_df_otap::pdata::Context::next_ack(AckMsg::new(logs_pdata))
                 {
                     ctx.send_control_msg(NodeControlMsg::Ack(ack))
                         .await
@@ -3007,7 +2977,7 @@ mod tests {
 
                     // Ack everything so the clients unblock and succeed
                     if let Some((_node_id, ack)) =
-                        crate::pdata::Context::next_ack(AckMsg::new(pdata))
+                        otap_df_otap::pdata::Context::next_ack(AckMsg::new(pdata))
                     {
                         ctx.send_control_msg(NodeControlMsg::Ack(ack))
                             .await
@@ -3133,7 +3103,9 @@ mod tests {
                 // Hold the request long enough for the HTTP request to observe permit contention.
                 tokio::time::sleep(Duration::from_millis(300)).await;
 
-                if let Some((_node_id, ack)) = crate::pdata::Context::next_ack(AckMsg::new(pdata)) {
+                if let Some((_node_id, ack)) =
+                    otap_df_otap::pdata::Context::next_ack(AckMsg::new(pdata))
+                {
                     ctx.send_control_msg(NodeControlMsg::Ack(ack))
                         .await
                         .expect("Failed to send Ack");
