@@ -30,3 +30,11 @@ tokio.workspace = true
 
 [features]
 experimental-tls = ["otap-df-otap/experimental-tls"]
+
+[dev-dependencies]
+arrow.workspace = true
+otap-df-engine = { path = "../engine", features = ["test-utils"] }
+otap-df-otap = { path = "../otap", features = ["test-utils"] }
+otap-df-channel = { path = "../channel" }
+portpicker.workspace = true
+prost.workspace = true
