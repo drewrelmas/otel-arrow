@@ -362,7 +362,7 @@ impl<'a> CefExtensionsIter<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::syslog_cef_receiver::parser;
+    use crate::receivers::syslog_cef_receiver::parser;
 
     #[test]
     fn test_cef_parsing() {

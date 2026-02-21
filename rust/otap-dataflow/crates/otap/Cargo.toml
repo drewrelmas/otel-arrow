@@ -114,3 +114,4 @@ tokio-stream.workspace = true
 otap-test-tls-certs.workspace = true
 otap-df-engine = { path = "../engine", features = ["test-utils"] }
 otap-df-state = { path = "../state" }
+otap-df-core-nodes = { path = "../core-nodes" }

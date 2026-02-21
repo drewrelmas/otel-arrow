@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::syslog_cef_receiver::parser;
+use crate::receivers::syslog_cef_receiver::parser;
 
 /// RFC 3164 message structure
 #[derive(Debug, Clone, PartialEq)]
@@ -178,7 +178,7 @@ fn parse_tag_components(tag: Option<&[u8]>) -> (Option<&[u8]>, Option<&[u8]>) {
 
 #[cfg(test)]
 mod tests {
-    use crate::syslog_cef_receiver::parser::*;
+    use crate::receivers::syslog_cef_receiver::parser::*;
 
     #[test]
     fn test_rfc3164_parsing() {

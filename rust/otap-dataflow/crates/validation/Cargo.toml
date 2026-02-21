@@ -44,3 +44,4 @@ prost = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3"
+otap-df-core-nodes = { path = "../core-nodes" }
