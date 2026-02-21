@@ -6,10 +6,11 @@
 use clap::Parser;
 use otap_df_config::engine::{HttpAdminSettings, OtelDataflowSpec};
 use otap_df_config::policy::{CoreAllocation, CoreRange};
-// Keep this side-effect import so the crate is linked and its `linkme`
-// distributed-slice registrations (contrib processors/exporters) are visible
+// Keep these side-effect import so the crates are linked and their `linkme`
+// distributed-slice registrations (contrib-nodes and core-nodes) are visible
 // in `OTAP_PIPELINE_FACTORY` at runtime.
 use otap_df_contrib_nodes as _;
+use otap_df_core_nodes as _;
 use otap_df_controller::Controller;
 use otap_df_otap::OTAP_PIPELINE_FACTORY;
 use std::path::PathBuf;
