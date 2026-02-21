@@ -5,3 +5,5 @@
 
 /// Receiver implementations for core nodes.
 pub mod receivers;
+
+pub use receivers::syslog_cef_receiver;

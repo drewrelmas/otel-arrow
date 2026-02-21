@@ -29,9 +29,6 @@ pub mod batch_processor;
 // Retry processor that is aware of the OTAP PData/context.
 pub mod retry_processor;
 
-/// Receiver that reads in syslog data
-pub mod syslog_cef_receiver;
-
 /// Common component accessories (e.g., context-state management).
 pub mod accessory;
 

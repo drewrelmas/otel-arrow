@@ -213,7 +213,7 @@ unchecked-index = []
 unchecked-arithmetic = []
 
 # Experimental features
-experimental-tls = ["otap-df-otap/experimental-tls", "dep:rustls"]
+experimental-tls = ["otap-df-otap/experimental-tls", "otap-df-core-nodes/experimental-tls", "dep:rustls"]
 
 # Contrib exporters (opt-in) - now in contrib-nodes
 contrib-exporters = ["otap-df-contrib-nodes/contrib-exporters"]

@@ -13,11 +13,13 @@ rust-version.workspace = true
 workspace = true
 
 [dependencies]
+chrono.workspace = true
 otap-df-config = { path = "../config" }
 otap-df-engine = { path = "../engine" }
 otap-df-otap = { path = "../otap" }
 otap-df-pdata = { path = "../pdata" }
 otap-df-telemetry = { path = "../telemetry" }
+otap-df-telemetry-macros = { path = "../telemetry-macros" }
 
 async-trait.workspace = true
 bytes.workspace = true
@@ -25,3 +27,6 @@ linkme.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
+
+[features]
+experimental-tls = ["otap-df-otap/experimental-tls"]
