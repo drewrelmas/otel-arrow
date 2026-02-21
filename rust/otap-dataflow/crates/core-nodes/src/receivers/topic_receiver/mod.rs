@@ -5,8 +5,6 @@
 //!
 //! Note: This implementation is incomplete and only focus on the configuration.
 
-use crate::OTAP_RECEIVER_FACTORIES;
-use crate::pdata::OtapPdata;
 use async_trait::async_trait;
 use linkme::distributed_slice;
 use otap_df_config::TopicName;
@@ -22,6 +20,8 @@ use otap_df_engine::local::receiver as local;
 use otap_df_engine::node::NodeId;
 use otap_df_engine::receiver::ReceiverWrapper;
 use otap_df_engine::terminal_state::TerminalState;
+use otap_df_otap::OTAP_RECEIVER_FACTORIES;
+use otap_df_otap::pdata::OtapPdata;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
