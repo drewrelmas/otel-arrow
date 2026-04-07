@@ -6,4 +6,5 @@
 pub mod exporter;
 pub mod message;
 pub mod processor;
+pub mod processor_chain;
 pub mod receiver;
