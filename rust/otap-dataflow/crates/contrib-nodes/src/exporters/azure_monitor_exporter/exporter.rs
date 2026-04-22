@@ -13,9 +13,11 @@ use otap_df_engine::local::exporter::{EffectHandler, Exporter};
 use otap_df_engine::message::{ExporterInbox, Message};
 use otap_df_engine::terminal_state::TerminalState;
 use otap_df_pdata::otlp::OtlpProtoBytes;
+use otap_df_pdata::otlp::logs::LogsProtoBytesEncoder;
+use otap_df_pdata::otlp::{ProtoBuffer, ProtoBytesEncoder};
 use otap_df_pdata::views::otap::OtapLogsView;
 use otap_df_pdata::views::otlp::bytes::logs::RawLogsData;
-use otap_df_pdata::{OtapArrowRecords, OtapPayload};
+use otap_df_pdata::{OtapArrowRecords, OtapPayload, OtapPayloadHelpers};
 
 use super::auth::{Auth, PendingTokenRefresh};
 use super::client::LogsIngestionClientPool;
@@ -59,6 +61,14 @@ pub struct AzureMonitorExporter {
     in_flight_exports: InFlightExports,
     last_batch_queued_at: tokio::time::Instant,
     heartbeat: Option<Heartbeat>,
+    /// When true, payloads are sent as raw OTLP protobuf without transformation.
+    otlp_passthrough: bool,
+    /// Monotonically increasing batch ID for OTLP passthrough exports.
+    next_otlp_batch_id: u64,
+    /// Protobuf encoder for converting OtapArrowRecords to OTLP proto bytes.
+    logs_proto_encoder: LogsProtoBytesEncoder,
+    /// Reusable protobuf encoding buffer.
+    proto_buffer: ProtoBuffer,
 }
 
 impl AzureMonitorExporter {
@@ -81,6 +91,9 @@ impl AzureMonitorExporter {
         // Create Gzip batcher
         let gzip_batcher = GzipBatcher::new(config.api.gzip_compression_level);
 
+        // Detect OTLP passthrough mode from stream name
+        let otlp_passthrough = config.api.is_otlp_passthrough();
+
         // Create heartbeat handler
         let heartbeat = if config.heartbeat.enabled {
             Some(Heartbeat::new(&config.api, &config.heartbeat.overrides)?)
@@ -98,6 +111,10 @@ impl AzureMonitorExporter {
             in_flight_exports: InFlightExports::new(MAX_IN_FLIGHT_EXPORTS),
             last_batch_queued_at: tokio::time::Instant::now(),
             heartbeat,
+            otlp_passthrough,
+            next_otlp_batch_id: 0,
+            logs_proto_encoder: LogsProtoBytesEncoder::new(),
+            proto_buffer: ProtoBuffer::with_capacity(8 * 1024),
         })
     }
 
@@ -366,6 +383,93 @@ impl AzureMonitorExporter {
         Ok(())
     }
 
+    /// Handle an OTLP passthrough export: send raw protobuf directly without
+    /// transformation or gzip batching.
+    async fn handle_otlp_passthrough(
+        &mut self,
+        effect_handler: &EffectHandler<OtapPdata>,
+        context: Context,
+        mut payload: OtapPayload,
+        msg_id: u64,
+    ) -> Result<(), EngineError> {
+        // Extract or encode the protobuf body from the payload
+        let body = match &mut payload {
+            OtapPayload::OtlpBytes(otlp_bytes) => match otlp_bytes {
+                OtlpProtoBytes::ExportLogsRequest(bytes) => {
+                    if context.may_return_payload() {
+                        bytes.clone()
+                    } else {
+                        std::mem::replace(bytes, Bytes::new())
+                    }
+                }
+                OtlpProtoBytes::ExportMetricsRequest(_)
+                | OtlpProtoBytes::ExportTracesRequest(_) => {
+                    otel_warn!(
+                        "azure_monitor_exporter.otlp_passthrough.unsupported_signal",
+                        signal = "metrics_or_traces",
+                        format = "otlp_proto"
+                    );
+                    return Ok(());
+                }
+            },
+            OtapPayload::OtapArrowRecords(otap_records) => match otap_records {
+                OtapArrowRecords::Logs(_) => {
+                    self.proto_buffer.clear();
+                    if let Err(e) = self
+                        .logs_proto_encoder
+                        .encode(otap_records, &mut self.proto_buffer)
+                    {
+                        effect_handler
+                            .notify_nack(NackMsg::new(
+                                e.to_string(),
+                                OtapPdata::new(context, payload),
+                            ))
+                            .await?;
+                        return Ok(());
+                    }
+                    if !context.may_return_payload() {
+                        _ = otap_records.take_payload();
+                    }
+                    Bytes::copy_from_slice(self.proto_buffer.as_ref())
+                }
+                OtapArrowRecords::Metrics(_) | OtapArrowRecords::Traces(_) => {
+                    otel_warn!(
+                        "azure_monitor_exporter.otlp_passthrough.unsupported_signal",
+                        signal = "metrics_or_traces",
+                        format = "otap_arrow"
+                    );
+                    return Ok(());
+                }
+            },
+        };
+
+        // Track the message in state
+        let saved_payload = if context.may_return_payload() {
+            payload
+        } else {
+            OtapPayload::empty(SignalType::Logs)
+        };
+        self.state.add_msg_to_data(msg_id, context, saved_payload);
+
+        // Assign a unique batch ID for this single-message export
+        let batch_id = self.next_otlp_batch_id;
+        self.next_otlp_batch_id += 1;
+        self.state.add_batch_msg_relationship(batch_id, msg_id);
+
+        // Send directly via client pool (no gzip batching)
+        let client = self.client_pool.take();
+        if let Some(completed_export) = self
+            .in_flight_exports
+            .push_export(client, batch_id, 1, body)
+            .await
+        {
+            self.finalize_export(effect_handler, completed_export)
+                .await?;
+        }
+
+        Ok(())
+    }
+
     #[inline]
     fn get_next_token_refresh(token: AccessToken) -> tokio::time::Instant {
         let now = azure_core::time::OffsetDateTime::now_utc();
@@ -395,6 +499,13 @@ impl AzureMonitorExporter {
             Ok(Message::PData(pdata)) => {
                 *msg_id += 1;
                 let (context, payload) = pdata.into_parts();
+
+                // OTLP passthrough: send raw protobuf directly, no transformation
+                if self.otlp_passthrough {
+                    return self
+                        .handle_otlp_passthrough(effect_handler, context, payload, *msg_id)
+                        .await;
+                }
 
                 let log_entries = match &payload {
                     OtapPayload::OtapArrowRecords(otap_records) => match otap_records {
@@ -465,7 +576,8 @@ impl Exporter<OtapPdata> for AzureMonitorExporter {
             stream = self.config.api.stream_name.as_str(),
             dcr = self.config.api.dcr.as_str(),
             auth_method = self.config.auth.auth_method_name(),
-            gzip_compression_level = self.config.api.gzip_compression_level
+            gzip_compression_level = self.config.api.gzip_compression_level,
+            otlp_passthrough = self.otlp_passthrough
         );
 
         let mut msg_id = 0;

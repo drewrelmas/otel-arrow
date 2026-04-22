@@ -186,6 +186,19 @@ pub struct ApiConfig {
     pub gzip_compression_level: u32,
 }
 
+impl ApiConfig {
+    /// Returns true if the stream is a Microsoft OTLP passthrough stream.
+    ///
+    /// These streams (e.g. `Microsoft-OTLP-Logs`) accept native OTLP protobuf
+    /// payloads and do not require schema transformation or gzip batching.
+    /// The endpoint path uses `/otlp/v1/logs` instead of the query-string
+    /// `?api-version=` format.
+    #[must_use]
+    pub fn is_otlp_passthrough(&self) -> bool {
+        self.stream_name.starts_with("Microsoft-OTLP-")
+    }
+}
+
 /// Schema mapping configuration
 #[derive(Debug, Deserialize, Clone, Default)]
 pub struct SchemaConfig {
@@ -242,7 +255,11 @@ impl Config {
             ));
         }
 
-        self.validate_schema_unique_columns()?;
+        // Schema validation is only relevant when transforming data.
+        // OTLP passthrough streams send raw protobuf and ignore the schema.
+        if !self.api.is_otlp_passthrough() {
+            self.validate_schema_unique_columns()?;
+        }
 
         Ok(())
     }

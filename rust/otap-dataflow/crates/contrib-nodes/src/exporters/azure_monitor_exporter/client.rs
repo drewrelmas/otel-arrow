@@ -45,6 +45,10 @@ pub struct LogsIngestionClient {
 
     /// Shared metrics tracker for recording HTTP status codes and latency.
     metrics: AzureMonitorExporterMetricsRc,
+
+    /// When true, payloads are sent as raw OTLP protobuf (application/x-protobuf)
+    /// instead of gzip-compressed JSON.
+    otlp_passthrough: bool,
 }
 
 pub struct LogsIngestionClientPool {
@@ -131,6 +135,7 @@ impl LogsIngestionClient {
             auth_header: HeaderValue::from_static("Bearer "), // placeholder, will be updated on first use
             resource_id_header: None,
             metrics,
+            otlp_passthrough: false,
         }
     }
 
@@ -151,10 +156,21 @@ impl LogsIngestionClient {
         http_client: Client,
         metrics: AzureMonitorExporterMetricsRc,
     ) -> Result<Self, Error> {
-        let endpoint = format!(
-            "{}/dataCollectionRules/{}/streams/{}?api-version=2021-11-01-preview",
-            config.dcr_endpoint, config.dcr, config.stream_name
-        );
+        let otlp_passthrough = config.is_otlp_passthrough();
+
+        let endpoint = if otlp_passthrough {
+            // OTLP passthrough streams use a different URL structure:
+            // {dcr_endpoint}/dataCollectionRules/{dcr}/streams/{stream}/otlp/v1/logs
+            format!(
+                "{}/dataCollectionRules/{}/streams/{}/otlp/v1/logs",
+                config.dcr_endpoint, config.dcr, config.stream_name
+            )
+        } else {
+            format!(
+                "{}/dataCollectionRules/{}/streams/{}?api-version=2021-11-01-preview",
+                config.dcr_endpoint, config.dcr, config.stream_name
+            )
+        };
 
         let resource_id_header = config
             .azure_monitor_source_resourceid
@@ -170,6 +186,7 @@ impl LogsIngestionClient {
             auth_header: HeaderValue::from_static("Bearer "), // placeholder, will be updated on first use
             resource_id_header,
             metrics,
+            otlp_passthrough,
         })
     }
 
@@ -249,12 +266,18 @@ impl LogsIngestionClient {
     async fn try_export(&mut self, body: Bytes) -> Result<Duration, Error> {
         let start = Instant::now();
 
-        let mut request = self
-            .http_client
-            .post(&self.endpoint)
-            .header(CONTENT_TYPE, "application/json")
-            .header(CONTENT_ENCODING, "gzip")
-            .header(AUTHORIZATION, &self.auth_header);
+        let mut request = if self.otlp_passthrough {
+            self.http_client
+                .post(&self.endpoint)
+                .header(CONTENT_TYPE, "application/x-protobuf")
+                .header(AUTHORIZATION, &self.auth_header)
+        } else {
+            self.http_client
+                .post(&self.endpoint)
+                .header(CONTENT_TYPE, "application/json")
+                .header(CONTENT_ENCODING, "gzip")
+                .header(AUTHORIZATION, &self.auth_header)
+        };
 
         if let Some(ref resource_id) = self.resource_id_header {
             request = request.header(AZURE_MONITOR_SOURCE_RESOURCEID_HEADER, resource_id);
