@@ -1969,7 +1969,6 @@ where
 struct HyperEdgeRuntime {
     sources: Vec<NodeIdPortName>,
 
-    #[allow(dead_code)]
     dispatch_policy: DispatchPolicy,
 
     // names are from the configuration, not yet resolved
