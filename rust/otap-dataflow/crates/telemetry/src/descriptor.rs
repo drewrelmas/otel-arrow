@@ -34,6 +34,22 @@ pub enum Temporality {
     Cumulative,
 }
 
+/// Selects which well-known per-signal metric schema a signal-split instrument
+/// (`#[signal_metric]` / `SignalCounter`) is exported as.
+///
+/// See `docs/telemetry/signal-metric-schemas.md`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SignalSchema {
+    /// One OTLP metric per signal, distinguished by name (e.g.
+    /// `consumed_log_records`, `consumed_metric_points`, `consumed_spans`).
+    #[default]
+    Granular,
+    /// A single metric (e.g. `consumed_items`) whose data points are
+    /// distinguished by a `signal` attribute (`logs` / `metrics` / `traces`).
+    Agnostic,
+}
+
 /// Numeric representation used by a metric field.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -43,6 +59,13 @@ pub enum MetricValueType {
     /// 64-bit floating point.
     F64,
 }
+
+/// A static data-point attribute (key, value) attached to a metric field.
+///
+/// Used to express the "agnostic" signal-metric schema, where several fields
+/// share one metric `name` but are distinguished by a data-point attribute
+/// (e.g. `("signal", "logs")`). See the dual signal-metric schemas RFC.
+pub type StaticAttribute = (&'static str, &'static str);
 
 /// Metadata describing a single field inside a metrics struct.
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -61,6 +84,18 @@ pub struct MetricsField {
     pub temporality: Option<Temporality>,
     /// The numeric representation for the metric values.
     pub value_type: MetricValueType,
+    /// Static data-point attributes attached to every value of this field.
+    ///
+    /// Empty for the common case. When multiple fields in a set share the same
+    /// `name` but carry distinct attributes here, they export as a single
+    /// metric with one attributed data point per field (the agnostic schema).
+    #[serde(skip_serializing_if = "is_empty_attributes")]
+    pub attributes: &'static [StaticAttribute],
+}
+
+#[allow(clippy::trivially_copy_pass_by_ref)]
+fn is_empty_attributes(attrs: &&'static [StaticAttribute]) -> bool {
+    attrs.is_empty()
 }
 
 /// Descriptor for a multivariate metrics.

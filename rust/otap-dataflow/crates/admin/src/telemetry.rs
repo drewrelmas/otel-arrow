@@ -2360,7 +2360,7 @@ mod tests {
     static TEST_METRICS_DESCRIPTOR: MetricsDescriptor = MetricsDescriptor {
         name: "test_metrics",
         metrics: &[
-            MetricsField {
+            MetricsField { attributes: &[],
                 name: "requests_total",
                 unit: "1",
                 instrument: Instrument::Counter,
@@ -2368,7 +2368,7 @@ mod tests {
                 brief: "Total number of requests",
                 value_type: MetricValueType::U64,
             },
-            MetricsField {
+            MetricsField { attributes: &[],
                 name: "errors_total",
                 unit: "1",
                 instrument: Instrument::Counter,
@@ -2381,7 +2381,7 @@ mod tests {
 
     static TEST_METRICS_DESCRIPTOR_2: MetricsDescriptor = MetricsDescriptor {
         name: "database_metrics",
-        metrics: &[MetricsField {
+        metrics: &[MetricsField { attributes: &[],
             name: "connections_active",
             unit: "1",
             instrument: Instrument::Gauge,
@@ -2802,7 +2802,7 @@ mod tests {
 
     static MMSC_METRICS_DESCRIPTOR: MetricsDescriptor = MetricsDescriptor {
         name: "latency_metrics",
-        metrics: &[MetricsField {
+        metrics: &[MetricsField { attributes: &[],
             name: "request_duration",
             unit: "ms",
             instrument: Instrument::Mmsc,
@@ -3469,7 +3469,7 @@ mod tests {
     static E2E_METRICS_DESCRIPTOR: MetricsDescriptor = MetricsDescriptor {
         name: "http_server",
         metrics: &[
-            MetricsField {
+            MetricsField { attributes: &[],
                 name: "http_requests",
                 unit: "1",
                 instrument: Instrument::Counter,
@@ -3477,7 +3477,7 @@ mod tests {
                 brief: "Total HTTP requests",
                 value_type: MetricValueType::U64,
             },
-            MetricsField {
+            MetricsField { attributes: &[],
                 name: "http_request_duration",
                 unit: "s",
                 instrument: Instrument::Counter,
@@ -3485,7 +3485,7 @@ mod tests {
                 brief: "Total request duration",
                 value_type: MetricValueType::F64,
             },
-            MetricsField {
+            MetricsField { attributes: &[],
                 name: "memory_usage",
                 unit: "By",
                 instrument: Instrument::Gauge,

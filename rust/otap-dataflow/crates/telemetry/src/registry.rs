@@ -44,6 +44,7 @@ pub struct TelemetryRegistryHandle {
 pub(crate) struct TelemetryRegistry {
     pub(crate) entities: EntityRegistry,
     pub(crate) metrics: MetricSetRegistry,
+    pub(crate) signal_schema: crate::descriptor::SignalSchema,
 }
 
 impl Default for TelemetryRegistryHandle {
@@ -113,7 +114,17 @@ impl TelemetryRegistryHandle {
         // to the console.
         let mut registry = self.registry.lock();
         let outcome = registry.entities.register(attrs);
-        registry.metrics.register(outcome.key())
+        let schema = registry.signal_schema;
+        registry.metrics.register(outcome.key(), schema)
+    }
+
+    /// Sets the global per-signal metric schema applied to signal-split metric
+    /// sets (`#[signal_metric]` / `SignalCounter`) registered after this call.
+    ///
+    /// Intended to be set once at engine startup from telemetry config. The
+    /// default is [`crate::descriptor::SignalSchema::Granular`].
+    pub fn set_signal_schema(&self, schema: crate::descriptor::SignalSchema) {
+        self.registry.lock().signal_schema = schema;
     }
 
     /// Registers a metric set type for an existing entity key.
@@ -125,7 +136,8 @@ impl TelemetryRegistryHandle {
         let mut registry = self.registry.lock();
         let retained = registry.entities.retain(entity_key);
         debug_assert!(retained, "entity key must be registered before metrics");
-        registry.metrics.register(entity_key)
+        let schema = registry.signal_schema;
+        registry.metrics.register(entity_key, schema)
     }
 
     /// Unregisters a metric set by key.
@@ -177,7 +189,7 @@ impl TelemetryRegistryHandle {
             FnMut(&'static MetricsDescriptor, &'a dyn AttributeSetHandler, MetricsIterator<'a>),
     {
         let mut reg = self.registry.lock();
-        let TelemetryRegistry { entities, metrics } = &mut *reg;
+        let TelemetryRegistry { entities, metrics, .. } = &mut *reg;
         metrics.visit_metrics_and_reset(entities, f, keep_all_zeroes);
     }
 
@@ -252,7 +264,7 @@ mod tests {
     static MOCK_METRICS_DESCRIPTOR: MetricsDescriptor = MetricsDescriptor {
         name: "test_metrics",
         metrics: &[
-            MetricsField {
+            MetricsField { attributes: &[],
                 name: "counter1",
                 unit: "1",
                 brief: "Test counter 1",
@@ -260,7 +272,7 @@ mod tests {
                 temporality: Some(Temporality::Delta),
                 value_type: MetricValueType::U64,
             },
-            MetricsField {
+            MetricsField { attributes: &[],
                 name: "counter2",
                 unit: "1",
                 brief: "Test counter 2",

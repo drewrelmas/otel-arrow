@@ -51,5 +51,6 @@ tracing-subscriber = { workspace = true, features = ["env-filter","registry", "s
 tower = { workspace = true }
 tempfile = { workspace = true }
 opentelemetry_sdk = { workspace = true, features = ["testing"] }
+otap-df-telemetry-macros = { workspace = true }
 otap-df-pdata = { workspace = true, features = ["testing"] }
 rustls = { workspace = true, features = ["ring"] }

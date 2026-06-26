@@ -80,9 +80,20 @@ impl MetricsDispatcher {
                 };
 
                 // Entity attributes live on the instrumentation scope so OTel Views can
-                // target them via scope_attributes selectors; data points carry none.
+                // target them via scope_attributes selectors. Fields may additionally
+                // declare static data-point attributes (e.g. the agnostic schema's
+                // `signal`), which are attached per data point here.
                 for (field, value) in metrics_iter {
-                    self.add_opentelemetry_metric(field, value, &[], &meter);
+                    if field.attributes.is_empty() {
+                        self.add_opentelemetry_metric(field, value, &[], &meter);
+                    } else {
+                        let dp_attributes: Vec<opentelemetry::KeyValue> = field
+                            .attributes
+                            .iter()
+                            .map(|(k, v)| opentelemetry::KeyValue::new(*k, *v))
+                            .collect();
+                        self.add_opentelemetry_metric(field, value, &dp_attributes, &meter);
+                    }
                 }
             });
 
@@ -333,6 +344,10 @@ impl MetricsDispatcher {
 mod tests {
     use std::f64::consts::PI;
 
+    // The metric_set/derive macros emit absolute `otap_df_telemetry::` paths;
+    // alias the current crate so they resolve inside the crate's own tests.
+    use crate as otap_df_telemetry;
+
     use super::*;
     use crate::descriptor::MetricValueType;
     use crate::instrument::Mmsc;
@@ -353,7 +368,7 @@ mod tests {
 
     static SCOPE_ATTR_METRICS_DESCRIPTOR: MetricsDescriptor = MetricsDescriptor {
         name: "scope_attr_dispatch_test",
-        metrics: &[MetricsField {
+        metrics: &[MetricsField { attributes: &[],
             name: "requests",
             unit: "{request}",
             brief: "request count",
@@ -602,7 +617,7 @@ mod tests {
     #[test]
     fn test_add_opentelemetry_counter() {
         let meter = global::meter("test_meter");
-        let field = MetricsField {
+        let field = MetricsField { attributes: &[],
             name: "test_counter",
             brief: "A test counter",
             unit: "1",
@@ -623,7 +638,7 @@ mod tests {
     #[test]
     fn test_add_opentelemetry_gauge() {
         let meter = global::meter("test_meter");
-        let field = MetricsField {
+        let field = MetricsField { attributes: &[],
             name: "test_gauge",
             brief: "A test gauge",
             unit: "1",
@@ -644,7 +659,7 @@ mod tests {
     #[test]
     fn test_add_opentelemetry_histogram() {
         let meter = global::meter("test_meter");
-        let field = MetricsField {
+        let field = MetricsField { attributes: &[],
             name: "test_histogram",
             brief: "A test histogram",
             unit: "1",
@@ -665,7 +680,7 @@ mod tests {
     #[test]
     fn test_add_opentelemetry_up_down_counter() {
         let meter = global::meter("test_meter");
-        let field = MetricsField {
+        let field = MetricsField { attributes: &[],
             name: "test_up_down_counter",
             brief: "A test up_down_counter",
             unit: "1",
@@ -686,7 +701,7 @@ mod tests {
     #[test]
     fn test_add_opentelemetry_mmsc() {
         let meter = global::meter("test_meter_mmsc");
-        let field = MetricsField {
+        let field = MetricsField { attributes: &[],
             name: "test_mmsc",
             brief: "A test MMSC instrument",
             unit: "ms",
@@ -750,7 +765,7 @@ mod tests {
 
         static MMSC_METRICS_DESCRIPTOR: MetricsDescriptor = MetricsDescriptor {
             name: "mmsc_e2e_test",
-            metrics: &[MetricsField {
+            metrics: &[MetricsField { attributes: &[],
                 name: "latency",
                 unit: "ms",
                 brief: "request latency",
@@ -878,5 +893,129 @@ mod tests {
             "scope must have no attributes when the entity has none, found: {scope_attrs:?}"
         );
         assert!(dp_attrs.is_empty(), "data points must carry no attributes");
+    }
+
+    // A real metric set using the `#[signal_metric]` SignalCounter, driven
+    // through the full macro -> descriptor -> registry -> dispatcher stack.
+    #[otap_df_telemetry_macros::metric_set(name = "signal_metric_e2e_test")]
+    #[derive(Debug, Default, Clone)]
+    struct SignalMetricSet {
+        /// items consumed
+        #[signal_metric(verb = "consumed")]
+        consumed: crate::instrument::SignalCounter<u64>,
+        /// messages consumed
+        #[signal_metric(verb = "consumed", per = "message")]
+        consumed_messages: crate::instrument::SignalCounter<u64>,
+    }
+
+    /// Dispatches `SignalMetricSet` under `schema` and returns, per exported
+    /// `consumed*` instrument, `(metric_name, [(signal_attr_or_empty, value)])`.
+    fn dispatch_signal_metric(
+        schema: crate::descriptor::SignalSchema,
+    ) -> Vec<(String, Vec<(String, u64)>)> {
+        let registry = TelemetryRegistryHandle::new();
+        registry.set_signal_schema(schema);
+        let mut metric_set = registry.register_metric_set::<SignalMetricSet>(ScopeAttrs {
+            descriptor: &NO_ATTRS_DESCRIPTOR,
+            values: vec![],
+        });
+        metric_set
+            .consumed
+            .add(crate::instrument::Signal::Logs, 120);
+        metric_set
+            .consumed
+            .add(crate::instrument::Signal::Metrics, 80);
+        metric_set
+            .consumed
+            .add(crate::instrument::Signal::Traces, 40);
+        metric_set
+            .consumed_messages
+            .add(crate::instrument::Signal::Logs, 2);
+        metric_set
+            .consumed_messages
+            .add(crate::instrument::Signal::Metrics, 1);
+        metric_set
+            .consumed_messages
+            .add(crate::instrument::Signal::Traces, 3);
+
+        let snapshot = metric_set.snapshot();
+        registry.accumulate_metric_set_snapshot(snapshot.key, &snapshot.metrics);
+
+        let dispatcher =
+            MetricsDispatcher::new(registry.clone(), std::time::Duration::from_secs(1));
+        let finished = dispatch_to_in_memory(&dispatcher);
+
+        let mut out = Vec::new();
+        for rm in &finished {
+            for sm in rm.scope_metrics() {
+                for metric in sm.metrics() {
+                    if !metric.name().starts_with("consumed") {
+                        continue;
+                    }
+                    let AggregatedMetrics::U64(MetricData::Sum(sum)) = metric.data() else {
+                        panic!("expected a u64 Sum for {}", metric.name());
+                    };
+                    let mut points = Vec::new();
+                    for dp in sum.data_points() {
+                        let signal = dp
+                            .attributes()
+                            .find(|kv| kv.key.as_str() == "signal")
+                            .map(|kv| kv.value.as_str().to_string())
+                            .unwrap_or_default();
+                        points.push((signal, dp.value()));
+                    }
+                    points.sort();
+                    out.push((metric.name().to_string(), points));
+                }
+            }
+        }
+        out.sort();
+        out
+    }
+
+    #[test]
+    fn signal_counter_granular_schema_emits_three_named_metrics() {
+        let metrics = dispatch_signal_metric(crate::descriptor::SignalSchema::Granular);
+        assert_eq!(
+            metrics,
+            vec![
+                ("consumed_log_messages".to_string(), vec![(String::new(), 2)]),
+                ("consumed_log_records".to_string(), vec![(String::new(), 120)]),
+                ("consumed_metric_messages".to_string(), vec![(String::new(), 1)]),
+                ("consumed_metric_points".to_string(), vec![(String::new(), 80)]),
+                ("consumed_spans".to_string(), vec![(String::new(), 40)]),
+                ("consumed_trace_messages".to_string(), vec![(String::new(), 3)]),
+            ],
+            "granular schema must emit distinctly-named item- and message-level metrics \
+             with no signal attribute"
+        );
+    }
+
+    #[test]
+    fn signal_counter_agnostic_schema_emits_one_metric_with_signal_attributes() {
+        let metrics = dispatch_signal_metric(crate::descriptor::SignalSchema::Agnostic);
+        assert_eq!(
+            metrics,
+            vec![
+                (
+                    "consumed_items".to_string(),
+                    vec![
+                        ("logs".to_string(), 120),
+                        ("metrics".to_string(), 80),
+                        ("traces".to_string(), 40),
+                    ],
+                ),
+                (
+                    "consumed_messages".to_string(),
+                    vec![
+                        ("logs".to_string(), 2),
+                        ("metrics".to_string(), 1),
+                        ("traces".to_string(), 3),
+                    ],
+                ),
+            ],
+            "agnostic schema must dedupe into `consumed_items` and `consumed_messages` \
+             metrics, each with three signal-attributed data points"
+        );
     }
 }

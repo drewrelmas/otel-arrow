@@ -9,7 +9,7 @@
 //! ToDo: Use OTLP Views instead of the OTLP Request structs
 
 use self::config::{Config, DisplayMode, SignalActive, Verbosity};
-use self::metrics::DebugPdataMetrics;
+use self::metrics::{DebugPdataMetrics, Signal};
 use self::output::{DebugOutput, DebugOutputPorts, DebugOutputWriter, OutputMode};
 use self::sampling::Sampler;
 use async_trait::async_trait;
@@ -353,7 +353,7 @@ impl local::Processor<OtapPdata> for DebugProcessor {
                             })?;
                             self.process_log(req, debug_output.as_mut()).await?;
                         }
-                        self.metrics.logs_consumed.add(1);
+                        self.metrics.consumed_messages.add(Signal::Logs, 1);
                     }
                     OtlpProtoBytes::ExportMetricsRequest(bytes) => {
                         if active_signals.contains(&SignalActive::Metrics) {
@@ -366,7 +366,7 @@ impl local::Processor<OtapPdata> for DebugProcessor {
                             })?;
                             self.process_metric(req, debug_output.as_mut()).await?;
                         }
-                        self.metrics.metrics_consumed.add(1);
+                        self.metrics.consumed_messages.add(Signal::Metrics, 1);
                     }
                     OtlpProtoBytes::ExportTracesRequest(bytes) => {
                         if active_signals.contains(&SignalActive::Spans) {
@@ -379,7 +379,7 @@ impl local::Processor<OtapPdata> for DebugProcessor {
                             })?;
                             self.process_trace(req, debug_output.as_mut()).await?;
                         }
-                        self.metrics.traces_consumed.add(1);
+                        self.metrics.consumed_messages.add(Signal::Traces, 1);
                     }
                 }
                 Ok(())
@@ -430,9 +430,7 @@ impl DebugProcessor {
         }
 
         self.metrics.metric_signals_consumed.add(metrics as u64);
-        self.metrics
-            .metric_datapoints_consumed
-            .add(data_points as u64);
+        self.metrics.consumed.add(Signal::Metrics, data_points as u64);
 
         let report_basic = format!(
             "Received {resource_metrics} resource metrics\nReceived {metrics} metrics\nReceived {data_points} data points\n"
@@ -480,9 +478,9 @@ impl DebugProcessor {
                 }
             }
         }
-        self.metrics.span_signals_consumed.add(spans as u64);
         self.metrics.span_events_consumed.add(events as u64);
         self.metrics.span_links_consumed.add(links as u64);
+        self.metrics.consumed.add(Signal::Traces, spans as u64);
 
         let report_basic = format!(
             "Received {resource_spans} resource spans\nReceived {spans} spans\nReceived {events} events\nReceived {links} links\n"
@@ -526,8 +524,8 @@ impl DebugProcessor {
                 }
             }
         }
-        self.metrics.log_signals_consumed.add(log_records as u64);
         self.metrics.events_consumed.add(events);
+        self.metrics.consumed.add(Signal::Logs, log_records as u64);
 
         let report_basic = format!(
             "Received {resource_logs} resource logs\nReceived {log_records} log records\nReceived {events} events\n"

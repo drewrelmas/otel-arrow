@@ -131,7 +131,7 @@ mod tests {
     static MOCK_METRICS_DESCRIPTOR: MetricsDescriptor = MetricsDescriptor {
         name: "test_metrics",
         metrics: &[
-            MetricsField {
+            MetricsField { attributes: &[],
                 name: "counter1",
                 unit: "1",
                 brief: "Test counter 1",
@@ -139,7 +139,7 @@ mod tests {
                 temporality: Some(Temporality::Delta),
                 value_type: MetricValueType::U64,
             },
-            MetricsField {
+            MetricsField { attributes: &[],
                 name: "counter2",
                 unit: "1",
                 brief: "Test counter 2",

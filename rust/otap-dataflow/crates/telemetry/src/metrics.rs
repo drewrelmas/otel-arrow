@@ -263,6 +263,10 @@ pub trait MetricSetHandler {
     fn clear_values(&mut self);
     /// Returns true if at least one metric value is non-zero (fast path check).
     fn needs_flush(&self) -> bool;
+    /// Selects the per-signal metric schema for any signal-split fields
+    /// (`#[signal_metric]`). Called once at registration; the default is a
+    /// no-op for metric sets with no signal-split fields.
+    fn set_signal_schema(&mut self, _schema: crate::descriptor::SignalSchema) {}
 }
 
 /// A registered metrics entry containing all necessary information for metrics aggregation.
@@ -410,8 +414,10 @@ impl MetricSetRegistry {
     pub(crate) fn register<T: MetricSetHandler + Default + Debug + Send + Sync>(
         &mut self,
         entity_key: EntityKey,
+        signal_schema: crate::descriptor::SignalSchema,
     ) -> MetricSet<T> {
-        let metrics = T::default();
+        let mut metrics = T::default();
+        metrics.set_signal_schema(signal_schema);
         let descriptor = metrics.descriptor();
 
         let metrics_key = self.metrics.insert(MetricsEntry::new(
@@ -578,7 +584,7 @@ mod tests {
     static MOCK_METRICS_DESCRIPTOR: MetricsDescriptor = MetricsDescriptor {
         name: "test_metrics",
         metrics: &[
-            MetricsField {
+            MetricsField { attributes: &[],
                 name: "counter1",
                 unit: "1",
                 brief: "Test counter 1",
@@ -586,7 +592,7 @@ mod tests {
                 temporality: Some(Temporality::Delta),
                 value_type: MetricValueType::U64,
             },
-            MetricsField {
+            MetricsField { attributes: &[],
                 name: "counter2",
                 unit: "1",
                 brief: "Test counter 2",
@@ -660,7 +666,7 @@ mod tests {
         let entity_key = register_entity(&mut entities, "value");
         let mut metrics = MetricSetRegistry::default();
 
-        let metric_set: MetricSet<MockMetricSet> = metrics.register(entity_key);
+        let metric_set: MetricSet<MockMetricSet> = metrics.register(entity_key, crate::descriptor::SignalSchema::Granular);
         assert_eq!(metric_set.entity_key(), entity_key);
         assert_eq!(metrics.len(), 1);
     }
@@ -671,7 +677,7 @@ mod tests {
         let entity_key = register_entity(&mut entities, "test_value");
         let mut metrics = MetricSetRegistry::default();
 
-        let metric_set: MetricSet<MockMetricSet> = metrics.register(entity_key);
+        let metric_set: MetricSet<MockMetricSet> = metrics.register(entity_key, crate::descriptor::SignalSchema::Granular);
         let metrics_key = metric_set.key;
 
         assert!(metrics.unregister(metrics_key).is_some());
@@ -686,8 +692,8 @@ mod tests {
         let entity_key2 = register_entity(&mut entities, "value2");
         let mut metrics = MetricSetRegistry::default();
 
-        let _metric_set1: MetricSet<MockMetricSet> = metrics.register(entity_key1);
-        let _metric_set2: MetricSet<MockMetricSet> = metrics.register(entity_key2);
+        let _metric_set1: MetricSet<MockMetricSet> = metrics.register(entity_key1, crate::descriptor::SignalSchema::Granular);
+        let _metric_set2: MetricSet<MockMetricSet> = metrics.register(entity_key2, crate::descriptor::SignalSchema::Granular);
 
         assert_eq!(metrics.len(), 2);
     }
@@ -698,7 +704,7 @@ mod tests {
         let entity_key = register_entity(&mut entities, "test_value");
         let mut metrics = MetricSetRegistry::default();
 
-        let metric_set: MetricSet<MockMetricSet> = metrics.register(entity_key);
+        let metric_set: MetricSet<MockMetricSet> = metrics.register(entity_key, crate::descriptor::SignalSchema::Granular);
         let metrics_key = metric_set.key;
 
         metrics.accumulate_snapshot(metrics_key, &[MetricValue::U64(10), MetricValue::U64(20)]);
@@ -737,7 +743,7 @@ mod tests {
         let entity_key = register_entity(&mut entities, "test_value");
         let mut metrics = MetricSetRegistry::default();
 
-        let metric_set: MetricSet<MockMetricSet> = metrics.register(entity_key);
+        let metric_set: MetricSet<MockMetricSet> = metrics.register(entity_key, crate::descriptor::SignalSchema::Granular);
         let metrics_key = metric_set.key;
 
         metrics.accumulate_snapshot(
@@ -771,7 +777,7 @@ mod tests {
         let entity_key = register_entity(&mut entities, "test_value");
         let mut metrics = MetricSetRegistry::default();
 
-        let metric_set: MetricSet<MockMetricSet> = metrics.register(entity_key);
+        let metric_set: MetricSet<MockMetricSet> = metrics.register(entity_key, crate::descriptor::SignalSchema::Granular);
         let metrics_key = metric_set.key;
 
         metrics.accumulate_snapshot(metrics_key, &[MetricValue::U64(u64::MAX)]);
@@ -784,7 +790,7 @@ mod tests {
         let entity_key = register_entity(&mut entities, "test_value");
         let mut metrics = MetricSetRegistry::default();
 
-        let metric_set: MetricSet<MockMetricSet> = metrics.register(entity_key);
+        let metric_set: MetricSet<MockMetricSet> = metrics.register(entity_key, crate::descriptor::SignalSchema::Granular);
         let metrics_key = metric_set.key;
 
         metrics.accumulate_snapshot(metrics_key, &[MetricValue::U64(100), MetricValue::U64(0)]);
@@ -831,7 +837,7 @@ mod tests {
     #[test]
     fn test_metrics_iterator() {
         let fields = &[
-            MetricsField {
+            MetricsField { attributes: &[],
                 name: "metric1",
                 unit: "1",
                 brief: "Test metric 1",
@@ -839,7 +845,7 @@ mod tests {
                 temporality: Some(Temporality::Delta),
                 value_type: MetricValueType::U64,
             },
-            MetricsField {
+            MetricsField { attributes: &[],
                 name: "metric2",
                 unit: "1",
                 brief: "Test metric 2",
@@ -871,7 +877,7 @@ mod tests {
 
     #[test]
     fn test_metrics_iterator_size_hint() {
-        let fields = &[MetricsField {
+        let fields = &[MetricsField { attributes: &[],
             name: "metric1",
             unit: "1",
             brief: "Test metric 1",
@@ -889,7 +895,7 @@ mod tests {
 
     #[test]
     fn test_metrics_iterator_fused() {
-        let fields = &[MetricsField {
+        let fields = &[MetricsField { attributes: &[],
             name: "metric1",
             unit: "1",
             brief: "Test metric 1",
@@ -932,7 +938,7 @@ mod tests {
         static MOCK_GAUGE_METRICS_DESCRIPTOR: MetricsDescriptor = MetricsDescriptor {
             name: "test_gauge_metrics",
             metrics: &[
-                MetricsField {
+                MetricsField { attributes: &[],
                     name: "gauge1",
                     unit: "1",
                     brief: "Test gauge 1",
@@ -940,7 +946,7 @@ mod tests {
                     temporality: None,
                     value_type: MetricValueType::U64,
                 },
-                MetricsField {
+                MetricsField { attributes: &[],
                     name: "counter1",
                     unit: "1",
                     brief: "Test counter 1",
@@ -970,7 +976,7 @@ mod tests {
         let entity_key = register_entity(&mut entities, "test_value");
         let mut metrics = MetricSetRegistry::default();
 
-        let metric_set: MetricSet<MockGaugeMetricSet> = metrics.register(entity_key);
+        let metric_set: MetricSet<MockGaugeMetricSet> = metrics.register(entity_key, crate::descriptor::SignalSchema::Granular);
         let metrics_key = metric_set.key;
 
         metrics.accumulate_snapshot(metrics_key, &[MetricValue::U64(5), MetricValue::U64(10)]);
@@ -1006,7 +1012,7 @@ mod tests {
 
         static MOCK_OBSERVED_METRICS_DESCRIPTOR: MetricsDescriptor = MetricsDescriptor {
             name: "test_observed_metrics",
-            metrics: &[MetricsField {
+            metrics: &[MetricsField { attributes: &[],
                 name: "counter1",
                 unit: "1",
                 brief: "Test counter 1",
@@ -1035,7 +1041,7 @@ mod tests {
         let entity_key = register_entity(&mut entities, "attr");
         let mut metrics = MetricSetRegistry::default();
 
-        let metric_set: MetricSet<MockCumulativeCounterMetricSet> = metrics.register(entity_key);
+        let metric_set: MetricSet<MockCumulativeCounterMetricSet> = metrics.register(entity_key, crate::descriptor::SignalSchema::Granular);
         let metrics_key = metric_set.key;
 
         metrics.accumulate_snapshot(metrics_key, &[MetricValue::U64(10)]);
@@ -1186,7 +1192,7 @@ mod tests {
 
         static MOCK_MMSC_METRICS_DESCRIPTOR: MetricsDescriptor = MetricsDescriptor {
             name: "test_mmsc_metrics",
-            metrics: &[MetricsField {
+            metrics: &[MetricsField { attributes: &[],
                 name: "latency",
                 unit: "ms",
                 brief: "Test MMSC instrument",
@@ -1215,7 +1221,7 @@ mod tests {
         let entity_key = register_entity(&mut entities, "test_value");
         let mut metrics = MetricSetRegistry::default();
 
-        let metric_set: MetricSet<MockMmscMetricSet> = metrics.register(entity_key);
+        let metric_set: MetricSet<MockMmscMetricSet> = metrics.register(entity_key, crate::descriptor::SignalSchema::Granular);
         let metrics_key = metric_set.key;
 
         // First snapshot: min=2, max=8, sum=15, count=3

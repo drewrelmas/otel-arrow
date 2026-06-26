@@ -84,16 +84,12 @@ runtime metric sets may also be attached by the pipeline telemetry policy.
 
 | Metric | Unit | Description |
 | --- | --- | --- |
-| `processor.debug.pdata.log_signals_consumed` | `{log}` | Number of log signals consumed. |
+| `processor.debug.pdata.consumed` (signal-metric) | `{log_record}` / `{data_point}` / `{span}` (granular) or `{item}` (agnostic) | Items consumed, split per signal. Granular emits `consumed_log_records` / `consumed_metric_points` / `consumed_spans`; agnostic emits `consumed_items` with a `signal` data-point attribute. |
+| `processor.debug.pdata.consumed_messages` (signal-metric) | `{msg}` | Messages (OTLP requests) consumed, split per signal. Granular emits `consumed_log_messages` / `consumed_metric_messages` / `consumed_trace_messages`; agnostic emits `consumed_messages` with a `signal` data-point attribute. |
 | `processor.debug.pdata.events_consumed` | `{event}` | Number of events (structured logs) consumed. |
-| `processor.debug.pdata.span_signals_consumed` | `{span}` | Number of span signals consumed. |
 | `processor.debug.pdata.span_links_consumed` | `{link}` | Number of span links consumed. |
 | `processor.debug.pdata.span_events_consumed` | `{event}` | Number of span events (structured logs) consumed. |
 | `processor.debug.pdata.metric_signals_consumed` | `{metric}` | Number of metrics consumed. |
-| `processor.debug.pdata.metric_datapoints_consumed` | `{datapoint}` | Number of metric datapoints consumed. |
-| `processor.debug.pdata.metrics_consumed` | `{msg}` | Number of metrics (batches) consumed. |
-| `processor.debug.pdata.logs_consumed` | `{msg}` | Number of logs (batches) consumed. |
-| `processor.debug.pdata.traces_consumed` | `{msg}` | Number of traces (batches) consumed. |
 
 ### Events
 

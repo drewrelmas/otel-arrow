@@ -150,6 +150,79 @@ impl Counter<f64> {
     }
 }
 
+/// The telemetry signal a measurement pertains to.
+///
+/// Used by [`SignalCounter`] to route a single write-once `add(signal, n)` call
+/// to the appropriate per-signal slot. The same variant resolves to a distinct
+/// metric name (granular schema) or a `signal` data-point attribute value
+/// (agnostic schema) at export time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Signal {
+    /// Logs signal.
+    Logs,
+    /// Metrics signal.
+    Metrics,
+    /// Traces signal.
+    Traces,
+}
+
+/// A signal-split delta counter: three [`Counter`] slots (logs / metrics /
+/// traces) behind a single write-once `add(signal, n)` axis.
+///
+/// Declared on a metric set with `#[signal_metric(verb = "...")]`. The proc
+/// macro expands it into three descriptor fields whose exact shape (granular
+/// per-signal names vs a single agnostic metric plus a `signal` attribute) is
+/// chosen by the configured [`crate::descriptor::SignalSchema`]. The hot path
+/// (`add`) and snapshot model are identical across schemas.
+#[repr(C)]
+#[derive(Default, Clone, Copy)]
+pub struct SignalCounter<T> {
+    logs: Counter<T>,
+    metrics: Counter<T>,
+    traces: Counter<T>,
+}
+
+impl SignalCounter<u64> {
+    /// Adds `v` to the slot for `signal`.
+    #[inline]
+    pub const fn add(&mut self, signal: Signal, v: u64) {
+        match signal {
+            Signal::Logs => self.logs.add(v),
+            Signal::Metrics => self.metrics.add(v),
+            Signal::Traces => self.traces.add(v),
+        }
+    }
+
+    /// Returns the current accumulated delta for `signal`.
+    #[inline]
+    #[must_use]
+    pub const fn get(&self, signal: Signal) -> u64 {
+        match signal {
+            Signal::Logs => self.logs.get(),
+            Signal::Metrics => self.metrics.get(),
+            Signal::Traces => self.traces.get(),
+        }
+    }
+
+    /// Resets all three slots to zero.
+    #[inline]
+    pub fn reset(&mut self) {
+        self.logs.reset();
+        self.metrics.reset();
+        self.traces.reset();
+    }
+}
+
+impl Debug for SignalCounter<u64> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SignalCounter")
+            .field("logs", &self.logs.get())
+            .field("metrics", &self.metrics.get())
+            .field("traces", &self.traces.get())
+            .finish()
+    }
+}
+
 // UpDownCounter implementation.
 // =============================
 

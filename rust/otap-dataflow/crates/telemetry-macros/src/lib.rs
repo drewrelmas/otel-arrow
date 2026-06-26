@@ -23,7 +23,7 @@ use syn::{
 ///   - `#[metrics(name = "my.metrics.name")]`
 ///     Field attributes:
 ///   - `#[metric(name = "field.name", unit = "{unit}")]`
-#[proc_macro_derive(MetricSetHandler, attributes(metrics, metric))]
+#[proc_macro_derive(MetricSetHandler, attributes(metrics, metric, signal_metric))]
 pub fn derive_metric_set_handler(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
@@ -69,17 +69,18 @@ pub fn derive_metric_set_handler(input: TokenStream) -> TokenStream {
         }
     };
 
-    // Collect metric fields (fields are included when they have #[metric(..)]).
-    let mut metric_field_idents = Vec::new();
-    let mut metric_field_units = Vec::new();
-    let mut metric_field_names = Vec::new();
-    let mut metric_field_briefs = Vec::new();
-    let mut metric_field_instruments: Vec<proc_macro2::TokenStream> = Vec::new();
-    let mut metric_field_temporalities: Vec<proc_macro2::TokenStream> = Vec::new();
-    let mut metric_field_value_types: Vec<proc_macro2::TokenStream> = Vec::new();
+    // Per-descriptor-entry full `MetricsField { .. }` literal token streams. A
+    // plain `#[metric]` field contributes one entry to both schema arrays; a
+    // `#[signal_metric]` field contributes three (one per signal), differing
+    // between the granular and agnostic arrays.
+    let mut granular_fields: Vec<proc_macro2::TokenStream> = Vec::new();
+    let mut agnostic_fields: Vec<proc_macro2::TokenStream> = Vec::new();
+    // Statements pushed (in descriptor order) into the snapshot value vector.
+    let mut snapshot_pushes: Vec<proc_macro2::TokenStream> = Vec::new();
     let mut metric_field_clear_stmts: Vec<proc_macro2::TokenStream> = Vec::new();
     let mut metric_field_needs_flush_checks: Vec<proc_macro2::TokenStream> = Vec::new();
     let mut always_flush = false;
+    let mut has_signal_metric = false;
 
     for field in fields {
         let ident = field
@@ -107,15 +108,99 @@ pub fn derive_metric_set_handler(input: TokenStream) -> TokenStream {
         }
         let brief_combined = brief_lines.join(" ");
 
+        // Handle #[signal_metric(verb = "...", per = "item"|"message")] fields
+        // (SignalCounter) by expanding into three per-signal descriptor entries
+        // whose shape is chosen at runtime by the configured SignalSchema.
+        if let Some((verb, per)) = parse_signal_metric_attr(field) {
+            has_signal_metric = true;
+            let brief = brief_combined.clone();
+
+            // The `per` axis controls the granular per-signal nouns/units and
+            // the agnostic metric name; the data-point split is identical.
+            let (granular, agnostic_name): ([(String, &str); 3], String) = match per.as_str() {
+                "message" => (
+                    [
+                        (format!("{verb}_log_messages"), "{msg}"),
+                        (format!("{verb}_metric_messages"), "{msg}"),
+                        (format!("{verb}_trace_messages"), "{msg}"),
+                    ],
+                    format!("{verb}_messages"),
+                ),
+                // "item" (default)
+                _ => (
+                    [
+                        (format!("{verb}_log_records"), "{log_record}"),
+                        (format!("{verb}_metric_points"), "{data_point}"),
+                        (format!("{verb}_spans"), "{span}"),
+                    ],
+                    format!("{verb}_items"),
+                ),
+            };
+            let agnostic_unit = if per == "message" { "{msg}" } else { "{item}" };
+
+            // Granular: one distinctly-named metric per signal.
+            for (name, unit) in &granular {
+                granular_fields.push(quote!( otap_df_telemetry::descriptor::MetricsField {
+                    name: #name,
+                    unit: #unit,
+                    brief: #brief,
+                    instrument: otap_df_telemetry::descriptor::Instrument::Counter,
+                    temporality: Some(otap_df_telemetry::descriptor::Temporality::Delta),
+                    value_type: otap_df_telemetry::descriptor::MetricValueType::U64,
+                    attributes: &[]
+                }));
+            }
+
+            // Agnostic: one shared metric name/unit, distinguished by a `signal`
+            // data-point attribute. Name, unit and brief MUST match across the
+            // three so the OTel SDK dedupes them into one instrument.
+            for signal in ["logs", "metrics", "traces"] {
+                agnostic_fields.push(quote!( otap_df_telemetry::descriptor::MetricsField {
+                    name: #agnostic_name,
+                    unit: #agnostic_unit,
+                    brief: #brief,
+                    instrument: otap_df_telemetry::descriptor::Instrument::Counter,
+                    temporality: Some(otap_df_telemetry::descriptor::Temporality::Delta),
+                    value_type: otap_df_telemetry::descriptor::MetricValueType::U64,
+                    attributes: &[("signal", #signal)]
+                }));
+            }
+
+            // Snapshot the three slots in logs/metrics/traces order (matches
+            // both descriptor arrays).
+            snapshot_pushes.push(quote!(
+                out.push(otap_df_telemetry::metrics::MetricValue::from(
+                    self.#ident.get(otap_df_telemetry::instrument::Signal::Logs)));
+                out.push(otap_df_telemetry::metrics::MetricValue::from(
+                    self.#ident.get(otap_df_telemetry::instrument::Signal::Metrics)));
+                out.push(otap_df_telemetry::metrics::MetricValue::from(
+                    self.#ident.get(otap_df_telemetry::instrument::Signal::Traces)));
+            ));
+            metric_field_clear_stmts.push(quote!( self.#ident.reset(); ));
+            metric_field_needs_flush_checks.push(quote!(
+                if self.#ident.get(otap_df_telemetry::instrument::Signal::Logs) != 0
+                    || self.#ident.get(otap_df_telemetry::instrument::Signal::Metrics) != 0
+                    || self.#ident.get(otap_df_telemetry::instrument::Signal::Traces) != 0
+                {
+                    return true;
+                }
+            ));
+            continue;
+        }
+
         // Find #[metric(...)]
         let mut name_attr: Option<String> = None;
         let mut unit_attr: Option<String> = None;
+        let mut attributes_attr: Vec<(String, String)> = Vec::new();
         for attr in &field.attrs {
-            if let Some((maybe_name, u)) = parse_metric_field_attr(attr) {
+            if let Some((maybe_name, u, attrs)) = parse_metric_field_attr(attr) {
                 if maybe_name.is_some() {
                     name_attr = maybe_name;
                 }
                 unit_attr = Some(u);
+                if !attrs.is_empty() {
+                    attributes_attr = attrs;
+                }
             }
         }
 
@@ -253,13 +338,25 @@ pub fn derive_metric_set_handler(input: TokenStream) -> TokenStream {
                 };
 
             let field_ident = ident;
-            metric_field_idents.push(field_ident.clone());
-            metric_field_units.push(unit);
-            metric_field_names.push(final_name);
-            metric_field_briefs.push(brief_combined);
-            metric_field_instruments.push(instrument_variant);
-            metric_field_temporalities.push(temporality_variant);
-            metric_field_value_types.push(value_type_variant);
+
+            let attr_pairs = attributes_attr
+                .iter()
+                .map(|(k, v)| quote!( (#k, #v) ));
+            let field_lit = quote!( otap_df_telemetry::descriptor::MetricsField {
+                name: #final_name,
+                unit: #unit,
+                brief: #brief_combined,
+                instrument: #instrument_variant,
+                temporality: #temporality_variant,
+                value_type: #value_type_variant,
+                attributes: &[ #(#attr_pairs),* ]
+            });
+            // Plain fields are identical across both schemas.
+            granular_fields.push(field_lit.clone());
+            agnostic_fields.push(field_lit);
+            snapshot_pushes.push(quote!(
+                out.push(otap_df_telemetry::metrics::MetricValue::from(self.#field_ident.get()));
+            ));
 
             match instrument_ty_name.as_str() {
                 "Counter" | "Mmsc" => {
@@ -278,29 +375,55 @@ pub fn derive_metric_set_handler(input: TokenStream) -> TokenStream {
         }
     }
 
-    let desc_ident = format_ident!("DESCRIPTOR");
+    // When the set has signal-split fields, the descriptor depends on the
+    // injected `__signal_schema`; otherwise both arrays are identical and a
+    // single static is returned unconditionally.
+    let descriptor_body = if has_signal_metric {
+        quote! {
+            static GRANULAR_DESCRIPTOR: otap_df_telemetry::descriptor::MetricsDescriptor =
+                otap_df_telemetry::descriptor::MetricsDescriptor {
+                    name: #metrics_name,
+                    metrics: &[ #( #granular_fields ),* ],
+                };
+            static AGNOSTIC_DESCRIPTOR: otap_df_telemetry::descriptor::MetricsDescriptor =
+                otap_df_telemetry::descriptor::MetricsDescriptor {
+                    name: #metrics_name,
+                    metrics: &[ #( #agnostic_fields ),* ],
+                };
+            match self.__signal_schema {
+                otap_df_telemetry::descriptor::SignalSchema::Granular => &GRANULAR_DESCRIPTOR,
+                otap_df_telemetry::descriptor::SignalSchema::Agnostic => &AGNOSTIC_DESCRIPTOR,
+            }
+        }
+    } else {
+        quote! {
+            static DESCRIPTOR: otap_df_telemetry::descriptor::MetricsDescriptor =
+                otap_df_telemetry::descriptor::MetricsDescriptor {
+                    name: #metrics_name,
+                    metrics: &[ #( #granular_fields ),* ],
+                };
+            &DESCRIPTOR
+        }
+    };
+
+    let set_schema_body = if has_signal_metric {
+        quote! {
+            fn set_signal_schema(&mut self, schema: otap_df_telemetry::descriptor::SignalSchema) {
+                self.__signal_schema = schema;
+            }
+        }
+    } else {
+        quote! {}
+    };
 
     let generated = quote! {
         impl #generics otap_df_telemetry::metrics::MetricSetHandler for #struct_ident #generics {
             fn descriptor(&self) -> &'static otap_df_telemetry::descriptor::MetricsDescriptor {
-                static #desc_ident: otap_df_telemetry::descriptor::MetricsDescriptor = otap_df_telemetry::descriptor::MetricsDescriptor {
-                    name: #metrics_name,
-                    metrics: &[
-                            #( otap_df_telemetry::descriptor::MetricsField {
-                                name: #metric_field_names,
-                                unit: #metric_field_units,
-                                brief: #metric_field_briefs,
-                                instrument: #metric_field_instruments,
-                                temporality: #metric_field_temporalities,
-                                value_type: #metric_field_value_types
-                            } ),*
-                        ],
-                    };
-                &#desc_ident
+                #descriptor_body
             }
             fn snapshot_values(&self) -> ::std::vec::Vec<otap_df_telemetry::metrics::MetricValue> {
                 let mut out = ::std::vec::Vec::with_capacity(self.descriptor().metrics.len());
-                #( out.push(otap_df_telemetry::metrics::MetricValue::from(self.#metric_field_idents.get())); )*
+                #( #snapshot_pushes )*
                 out
             }
             fn clear_values(&mut self) {
@@ -313,6 +436,7 @@ pub fn derive_metric_set_handler(input: TokenStream) -> TokenStream {
                 #( #metric_field_needs_flush_checks )*
                 false
             }
+            #set_schema_body
         }
     };
 
@@ -725,6 +849,27 @@ pub fn metric_set(attr: TokenStream, item: TokenStream) -> TokenStream {
     // Parse the struct item
     let mut s = parse_macro_input!(item as ItemStruct);
 
+    // If any field is a signal-split metric (`#[signal_metric]`), inject a
+    // hidden `__signal_schema` field so the generated `descriptor()` can select
+    // the granular or agnostic shape chosen at registration.
+    let has_signal_metric = s
+        .fields
+        .iter()
+        .any(|f| f.attrs.iter().any(|a| a.path().is_ident("signal_metric")));
+    if has_signal_metric {
+        if let Fields::Named(named) = &mut s.fields {
+            let schema_field: syn::Field = syn::parse::Parser::parse2(
+                syn::Field::parse_named,
+                quote!(
+                    #[doc(hidden)]
+                    __signal_schema: otap_df_telemetry::descriptor::SignalSchema
+                ),
+            )
+            .expect("failed to construct __signal_schema field");
+            named.named.push(schema_field);
+        }
+    }
+
     // Inject #[repr(C, align(64))]
     let repr_attr: Attribute = parse_quote!(#[repr(C, align(64))]);
     // Only add if not already present
@@ -817,12 +962,44 @@ fn parse_metrics_name_attr(attr: &Attribute) -> Option<String> {
     out
 }
 
-fn parse_metric_field_attr(attr: &Attribute) -> Option<(Option<String>, String)> {
+/// Parses `#[signal_metric(verb = "consumed", per = "item"|"message")]` on a
+/// field, returning `(verb, per)`. `verb` defaults to `"consumed"` and `per`
+/// to `"item"` when omitted.
+fn parse_signal_metric_attr(field: &syn::Field) -> Option<(String, String)> {
+    let attr = field
+        .attrs
+        .iter()
+        .find(|a| a.path().is_ident("signal_metric"))?;
+    let mut verb = String::from("consumed");
+    let mut per = String::from("item");
+    let _ = attr.parse_nested_meta(|meta| {
+        if meta.path.is_ident("verb") {
+            let s: LitStr = meta.value()?.parse()?;
+            verb = s.value();
+        } else if meta.path.is_ident("per") {
+            let s: LitStr = meta.value()?.parse()?;
+            per = s.value();
+        } else {
+            // Tolerate unknown keys; consume any `= "value"` that follows.
+            if meta.input.peek(syn::Token![=]) {
+                let _: syn::Token![=] = meta.input.parse()?;
+                let _: LitStr = meta.input.parse()?;
+            }
+        }
+        Ok(())
+    });
+    Some((verb, per))
+}
+
+fn parse_metric_field_attr(
+    attr: &Attribute,
+) -> Option<(Option<String>, String, Vec<(String, String)>)> {
     if !attr.path().is_ident("metric") {
         return None;
     }
     let mut name: Option<String> = None;
     let mut unit: Option<String> = None;
+    let mut attributes: Vec<(String, String)> = Vec::new();
     let _ = attr.parse_nested_meta(|meta| {
         if meta.path.is_ident("name") {
             let s: LitStr = meta.value()?.parse()?;
@@ -830,10 +1007,22 @@ fn parse_metric_field_attr(attr: &Attribute) -> Option<(Option<String>, String)>
         } else if meta.path.is_ident("unit") {
             let s: LitStr = meta.value()?.parse()?;
             unit = Some(s.value());
+        } else if meta.path.is_ident("attributes") {
+            // attributes(key = "value", ...) : static data-point attributes.
+            meta.parse_nested_meta(|inner| {
+                let key = inner
+                    .path
+                    .get_ident()
+                    .map(|i| i.to_string())
+                    .unwrap_or_default();
+                let v: LitStr = inner.value()?.parse()?;
+                attributes.push((key, v.value()));
+                Ok(())
+            })?;
         }
         Ok(())
     });
-    unit.map(|u| (name, u))
+    unit.map(|u| (name, u, attributes))
 }
 
 fn parse_attributes_name_attr(attr: &Attribute) -> Option<String> {
