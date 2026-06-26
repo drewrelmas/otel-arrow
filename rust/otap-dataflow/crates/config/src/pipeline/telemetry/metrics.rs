@@ -11,6 +11,21 @@ use serde::{Deserialize, Serialize};
 
 use crate::pipeline::telemetry::metrics::views::ViewConfig;
 
+/// Selects the well-known schema used to export per-signal internal metrics
+/// (those declared with `#[signal_metric]`). See
+/// `docs/telemetry/signal-metric-schemas.md`.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, Default, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SignalSchema {
+    /// One metric per signal, distinguished by name (e.g.
+    /// `consumed_log_records`, `consumed_metric_points`, `consumed_spans`).
+    #[default]
+    Granular,
+    /// A single metric (e.g. `consumed_items`) whose data points carry a
+    /// `signal` attribute valued `logs` / `metrics` / `traces`.
+    Agnostic,
+}
+
 /// OpenTelemetry Metrics configuration.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default, PartialEq)]
 pub struct MetricsConfig {
@@ -21,6 +36,11 @@ pub struct MetricsConfig {
     /// The metrics views configuration.
     #[serde(default)]
     pub views: Vec<ViewConfig>,
+
+    /// The schema used to export per-signal internal metrics. Defaults to
+    /// [`SignalSchema::Granular`].
+    #[serde(default)]
+    pub signal_schema: SignalSchema,
 }
 
 impl MetricsConfig {

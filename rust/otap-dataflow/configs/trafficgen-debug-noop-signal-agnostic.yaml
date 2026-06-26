@@ -1,0 +1,53 @@
+# Demonstrates the `agnostic` signal-metric schema (per the universal
+# component-telemetry RFC).
+#
+# The debug processor's `consumed` / `consumed_messages` SignalCounters collapse
+# into a single metric each, whose data points carry a `signal` attribute valued
+# `logs` / `metrics` / `traces`:
+#   consumed_items{signal="logs|metrics|traces"}
+#   consumed_messages{signal="logs|metrics|traces"}
+#
+# Run, then inspect the internal-telemetry endpoint:
+#   curl -s 'http://127.0.0.1:8080/api/v1/telemetry/metrics' | grep consumed
+version: otel_dataflow/v1
+engine:
+  telemetry:
+    metrics:
+      signal_schema: agnostic
+    resource:
+      service.name: "trafficgen-debug-noop-signal-agnostic"
+groups:
+  default:
+    pipelines:
+      main:
+        policies:
+          channel_capacity:
+            control:
+              node: 100
+              pipeline: 100
+            pdata: 128
+
+        nodes:
+          receiver:
+            type: receiver:traffic_generator
+            config:
+              traffic_config:
+                max_batch_size: 100
+                signals_per_second: 100
+                log_weight: 50
+                metric_weight: 40
+                trace_weight: 10
+              registry_path: https://github.com/open-telemetry/semantic-conventions.git[model]
+          debug:
+            type: processor:debug
+            config:
+              verbosity: basic
+          noop:
+            type: exporter:noop
+            config:
+
+        connections:
+          - from: receiver
+            to: debug
+          - from: debug
+            to: noop

@@ -1324,6 +1324,14 @@ impl<
         // observed state store and the internal telemetry system, and by the
         // controller context below.
         let telemetry_registry = TelemetryRegistryHandle::new();
+        telemetry_registry.set_signal_schema(match engine.telemetry.metrics.signal_schema {
+            otap_df_config::pipeline::telemetry::metrics::SignalSchema::Granular => {
+                otap_df_telemetry::descriptor::SignalSchema::Granular
+            }
+            otap_df_config::pipeline::telemetry::metrics::SignalSchema::Agnostic => {
+                otap_df_telemetry::descriptor::SignalSchema::Agnostic
+            }
+        });
         let controller_ctx = ControllerContext::new(telemetry_registry.clone());
 
         // Inject auto-detected process/host resource attributes (host.id,

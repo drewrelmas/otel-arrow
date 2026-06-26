@@ -815,10 +815,11 @@ fn collect_scalar_metric(
     });
     let mut sample = String::new();
     let value_str = format_prom_value(value, Some(field.value_type));
+    let labels = labels_with_field_attributes(base_labels, field);
     emit_sample_line(
         &mut sample,
         &metric_name,
-        base_labels,
+        &labels,
         &value_str,
         ts_suffix,
     );
@@ -843,6 +844,7 @@ fn collect_mmsc_metric(
         Some(escape_prom_help(field.brief))
     };
     let unit_word = ucum_to_prometheus_unit(field.unit).map(|u| u.to_string());
+    let labels = labels_with_field_attributes(base_labels, field);
 
     // _min and _max as gauges
     for (suffix, prom_type, val) in [("_min", "gauge", s.min), ("_max", "gauge", s.max)] {
@@ -856,7 +858,7 @@ fn collect_mmsc_metric(
         emit_sample_line(
             &mut sample,
             &sub_name,
-            base_labels,
+            &labels,
             &format!("{val}"),
             ts_suffix,
         );
@@ -875,7 +877,7 @@ fn collect_mmsc_metric(
         emit_sample_line(
             &mut sample,
             &sum_name,
-            base_labels,
+            &labels,
             &format!("{}", s.sum),
             ts_suffix,
         );
@@ -894,12 +896,35 @@ fn collect_mmsc_metric(
         emit_sample_line(
             &mut sample,
             &count_name,
-            base_labels,
+            &labels,
             &format!("{}", s.count),
             ts_suffix,
         );
         group.samples.push(sample);
     }
+}
+
+/// Combines the scope-level `base_labels` with a metric field's static
+/// data-point attributes (e.g. `signal="logs"`). Per the OTel-to-Prometheus
+/// spec, data-point attributes map to unprefixed metric labels. Returns
+/// `base_labels` unchanged when the field has no attributes.
+fn labels_with_field_attributes(base_labels: &str, field: &MetricsField) -> String {
+    if field.attributes.is_empty() {
+        return base_labels.to_string();
+    }
+    let mut labels = base_labels.to_string();
+    for (key, value) in field.attributes {
+        if !labels.is_empty() {
+            labels.push(',');
+        }
+        let _ = write!(
+            &mut labels,
+            "{}=\"{}\"",
+            sanitize_prom_label_key(key),
+            escape_prom_label_value(value)
+        );
+    }
+    labels
 }
 
 /// Writes a single sample line with optional labels and timestamp suffix.
@@ -3813,5 +3838,115 @@ mod tests {
             output.contains("core_0") && output.contains("core_1"),
             "output should contain samples from both entities.\nOutput:\n{output}"
         );
+    }
+
+    #[derive(Debug)]
+    struct AgnosticSignalMetricSet {
+        values: Vec<MetricValue>,
+    }
+
+    impl Default for AgnosticSignalMetricSet {
+        fn default() -> Self {
+            Self {
+                values: vec![
+                    MetricValue::U64(0), // logs
+                    MetricValue::U64(0), // metrics
+                    MetricValue::U64(0), // traces
+                ],
+            }
+        }
+    }
+
+    // Three fields sharing the same metric name `consumed_items`, distinguished
+    // only by a static `signal` data-point attribute -- the shape the agnostic
+    // signal-metric schema produces.
+    static AGNOSTIC_SIGNAL_DESCRIPTOR: MetricsDescriptor = MetricsDescriptor {
+        name: "processor.debug.pdata",
+        metrics: &[
+            MetricsField {
+                attributes: &[("signal", "logs")],
+                name: "consumed_items",
+                unit: "{item}",
+                instrument: Instrument::Counter,
+                temporality: Some(Temporality::Delta),
+                brief: "Items consumed",
+                value_type: MetricValueType::U64,
+            },
+            MetricsField {
+                attributes: &[("signal", "metrics")],
+                name: "consumed_items",
+                unit: "{item}",
+                instrument: Instrument::Counter,
+                temporality: Some(Temporality::Delta),
+                brief: "Items consumed",
+                value_type: MetricValueType::U64,
+            },
+            MetricsField {
+                attributes: &[("signal", "traces")],
+                name: "consumed_items",
+                unit: "{item}",
+                instrument: Instrument::Counter,
+                temporality: Some(Temporality::Delta),
+                brief: "Items consumed",
+                value_type: MetricValueType::U64,
+            },
+        ],
+    };
+
+    impl MetricSetHandler for AgnosticSignalMetricSet {
+        fn descriptor(&self) -> &'static MetricsDescriptor {
+            &AGNOSTIC_SIGNAL_DESCRIPTOR
+        }
+
+        fn snapshot_values(&self) -> Vec<MetricValue> {
+            self.values.clone()
+        }
+
+        fn clear_values(&mut self) {
+            self.values.iter_mut().for_each(MetricValue::reset);
+        }
+
+        fn needs_flush(&self) -> bool {
+            self.values.iter().any(|&v| !v.is_zero())
+        }
+    }
+
+    /// The agnostic schema emits one metric family whose data points are
+    /// distinguished by a `signal` label -- the standard OTel-to-Prometheus
+    /// mapping for data-point attributes.
+    #[test]
+    fn test_format_prometheus_text_renders_signal_data_point_attribute() {
+        let registry = TelemetryRegistryHandle::new();
+        let metric_set = registry.register_metric_set::<AgnosticSignalMetricSet>(E2eAttributeSet {
+            values: vec![AttributeValue::String("GET".to_string())],
+        });
+        registry.accumulate_metric_set_snapshot(
+            metric_set.metric_set_key(),
+            &[
+                MetricValue::U64(120), // logs
+                MetricValue::U64(80),  // metrics
+                MetricValue::U64(40),  // traces
+            ],
+        );
+
+        let output = format_prometheus_text(&registry, false, None, "");
+
+        // Exactly one HELP/TYPE family for the shared metric name.
+        assert_eq!(
+            output.matches("# TYPE consumed_items_total ").count(),
+            1,
+            "expected a single metric family.\nOutput:\n{output}"
+        );
+        // Each signal value lands on its own labelled data point.
+        for (signal, value) in [("logs", 120), ("metrics", 80), ("traces", 40)] {
+            assert!(
+                output.lines().any(|l| {
+                    l.starts_with("consumed_items_total{")
+                        && l.contains(&format!("signal=\"{signal}\""))
+                        && l.ends_with(&format!(" {value}"))
+                }),
+                "missing `signal=\"{signal}\"` data point with value {value}.\nOutput:\n{output}"
+            );
+        }
     }
 }

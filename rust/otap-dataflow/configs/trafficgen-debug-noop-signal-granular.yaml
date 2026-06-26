@@ -1,0 +1,52 @@
+# Demonstrates the `granular` signal-metric schema (the default).
+#
+# The debug processor's `consumed` / `consumed_messages` SignalCounters are
+# exported as one metric per signal, distinguished by name:
+#   consumed_log_records / consumed_metric_points / consumed_spans
+#   consumed_log_messages / consumed_metric_messages / consumed_trace_messages
+#
+# Run, then inspect the internal-telemetry endpoint:
+#   curl -s 'http://127.0.0.1:8080/api/v1/telemetry/metrics' | grep consumed
+version: otel_dataflow/v1
+engine:
+  telemetry:
+    metrics:
+      # The default; shown explicitly here for contrast with the agnostic config.
+      signal_schema: granular
+    resource:
+      service.name: "trafficgen-debug-noop-signal-granular"
+groups:
+  default:
+    pipelines:
+      main:
+        policies:
+          channel_capacity:
+            control:
+              node: 100
+              pipeline: 100
+            pdata: 128
+
+        nodes:
+          receiver:
+            type: receiver:traffic_generator
+            config:
+              traffic_config:
+                max_batch_size: 100
+                signals_per_second: 100
+                log_weight: 50
+                metric_weight: 40
+                trace_weight: 10
+              registry_path: https://github.com/open-telemetry/semantic-conventions.git[model]
+          debug:
+            type: processor:debug
+            config:
+              verbosity: basic
+          noop:
+            type: exporter:noop
+            config:
+
+        connections:
+          - from: receiver
+            to: debug
+          - from: debug
+            to: noop
