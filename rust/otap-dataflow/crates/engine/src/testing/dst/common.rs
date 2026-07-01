@@ -82,6 +82,9 @@ pub(super) fn frame(node_id: usize, interests: Interests, tag: u64) -> Frame {
             entry_time_ns: clock::nanos_since_birth(),
             output_port_index: 0,
         },
+        signal: None,
+        produced_items: 0,
+        consumed_items: 0,
     }
 }
 

@@ -109,6 +109,9 @@ impl Context {
                 entry_time_ns,
                 ..Default::default()
             },
+            signal: None,
+            produced_items: 0,
+            consumed_items: 0,
         });
     }
 
@@ -215,6 +218,9 @@ impl Context {
             interests,
             node_id,
             route: RouteData::default(),
+            signal: None,
+            produced_items: 0,
+            consumed_items: 0,
         });
     }
 
@@ -268,6 +274,9 @@ impl Context {
                 entry_time_ns: time_ns,
                 ..Default::default()
             },
+            signal: None,
+            produced_items: 0,
+            consumed_items: 0,
         });
     }
 
@@ -277,6 +286,26 @@ impl Context {
     pub(crate) fn stamp_output_port_index(&mut self, index: u16) {
         if let Some(top) = self.stack.last_mut() {
             top.route.output_port_index = index;
+        }
+    }
+
+    /// Stamp the top frame with the per-signal item count produced by the
+    /// current node at send time. Called only when the node has
+    /// `PRODUCER_METRICS` interest.
+    pub(crate) fn stamp_produced_items(&mut self, items: u32, signal: SignalType) {
+        if let Some(top) = self.stack.last_mut() {
+            top.produced_items = items;
+            top.signal = Some(signal);
+        }
+    }
+
+    /// Stamp the top frame with the per-signal item count consumed by the
+    /// current node at receive time. Called only when the node has
+    /// `CONSUMER_METRICS` interest.
+    pub(crate) fn stamp_consumed_items(&mut self, items: u32, signal: SignalType) {
+        if let Some(top) = self.stack.last_mut() {
+            top.consumed_items = items;
+            top.signal = Some(signal);
         }
     }
 
@@ -307,6 +336,9 @@ impl Context {
                 entry_time_ns: time_ns,
                 ..Default::default()
             },
+            signal: None,
+            produced_items: 0,
+            consumed_items: 0,
         });
     }
 
@@ -683,6 +715,11 @@ impl OtapPdata {
                 node_id,
                 node_interests & (Interests::PRODUCER_METRICS | Interests::ENTRY_TIMESTAMP),
             );
+            if node_interests.contains(Interests::PRODUCER_METRICS) {
+                let items = u32::try_from(self.num_items()).unwrap_or(u32::MAX);
+                let signal = self.signal_type();
+                self.context.stamp_produced_items(items, signal);
+            }
         }
     }
 
@@ -964,6 +1001,11 @@ impl_message_source_ext!(
 impl otap_df_engine::ReceivedAtNode for OtapPdata {
     fn received_at_node(&mut self, node_id: usize, node_interests: Interests) {
         self.context.push_entry_frame(node_id, node_interests);
+        if node_interests.contains(Interests::CONSUMER_METRICS) {
+            let items = u32::try_from(self.num_items()).unwrap_or(u32::MAX);
+            let signal = self.signal_type();
+            self.context.stamp_consumed_items(items, signal);
+        }
     }
 }
 
@@ -1635,6 +1677,57 @@ mod test {
         assert_eq!(frames.len(), 1);
         assert_eq!(frames[0].node_id, 7);
         assert_eq!(frames[0].interests, Interests::empty());
+    }
+
+    #[test]
+    fn test_received_at_node_stamps_consumed_items() {
+        use otap_df_engine::ReceivedAtNode;
+
+        // With CONSUMER_METRICS: entry frame carries per-signal consumed count.
+        let mut pdata = create_test_pdata();
+        let n = pdata.num_items() as u32;
+        assert!(n > 0);
+        pdata.received_at_node(42, Interests::CONSUMER_METRICS);
+        let frames = pdata.context.frames();
+        assert_eq!(frames.len(), 1);
+        assert_eq!(frames[0].node_id, 42);
+        assert_eq!(frames[0].consumed_items, n);
+        assert_eq!(frames[0].signal, Some(SignalType::Logs));
+
+        // ENTRY_TIMESTAMP only (no CONSUMER_METRICS): frame pushed, but no
+        // consumed count is stamped (num_items not consulted).
+        let mut pdata2 = create_test_pdata();
+        pdata2.received_at_node(7, Interests::ENTRY_TIMESTAMP);
+        let f2 = pdata2.context.frames();
+        assert_eq!(f2.len(), 1);
+        assert_eq!(f2[0].consumed_items, 0);
+        assert_eq!(f2[0].signal, None);
+
+        // Neither interest: no frame pushed at all.
+        let mut pdata3 = create_test_pdata();
+        pdata3.received_at_node(9, Interests::empty());
+        assert_eq!(pdata3.context.frames().len(), 0);
+    }
+
+    #[test]
+    fn test_prepare_source_send_stamps_produced_items() {
+        // With PRODUCER_METRICS: source frame carries per-signal produced count.
+        let mut pdata = create_test_pdata();
+        let n = pdata.num_items() as u32;
+        assert!(n > 0);
+        pdata.prepare_source_send(Interests::PRODUCER_METRICS, 5);
+        let frame = pdata.context.frames().last().expect("source frame");
+        assert_eq!(frame.node_id, 5);
+        assert_eq!(frame.produced_items, n);
+        assert_eq!(frame.signal, Some(SignalType::Logs));
+
+        // SOURCE_TAGGING only (no PRODUCER_METRICS): frame pushed, but no
+        // produced count is stamped (num_items not consulted).
+        let mut pdata2 = create_test_pdata();
+        pdata2.prepare_source_send(Interests::SOURCE_TAGGING, 6);
+        let frame2 = pdata2.context.frames().last().expect("source frame");
+        assert_eq!(frame2.produced_items, 0);
+        assert_eq!(frame2.signal, None);
     }
 
     #[test]

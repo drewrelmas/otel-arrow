@@ -637,6 +637,9 @@ mod tests {
                     node_id,
                     interests: Interests::ACKS,
                     route: RouteData::default(),
+                    signal: None,
+                    produced_items: 0,
+                    consumed_items: 0,
                 }],
             }
         }
@@ -647,6 +650,9 @@ mod tests {
                     node_id,
                     interests: Interests::NACKS,
                     route: RouteData::default(),
+                    signal: None,
+                    produced_items: 0,
+                    consumed_items: 0,
                 }],
             }
         }

@@ -13,6 +13,7 @@ use crate::node::{NodeId, NodeType};
 use crate::shared::message::{SharedReceiver, SharedSender};
 use bytemuck::Pod;
 use otap_df_channel::error::SendError;
+use otap_df_config::SignalType;
 use otap_df_telemetry::reporter::MetricsReporter;
 use smallvec::SmallVec;
 use std::collections::HashMap;
@@ -142,6 +143,28 @@ pub struct Frame {
     pub route: RouteData,
     /// The caller's node_id for routing.
     pub node_id: usize,
+    /// Signal type of the pdata that pushed this frame, used to attribute
+    /// per-signal produced/consumed item counts. `None` until stamped.
+    ///
+    /// These per-signal fields live on the frame (which travels behind a
+    /// `Box<PData>` in control messages) rather than on [`RouteData`] so they
+    /// do not enlarge the inline size of `UnwindData` / `NodeControlMsg`.
+    ///
+    /// Invariant: a single frame reused across a node's consumer and producer
+    /// roles carries one `signal`, so both `produced_items` and
+    /// `consumed_items` are attributed to it. This holds for every current
+    /// node because signal type is constant across a node. A future node that
+    /// consumes one signal type and produces another on the same frame would
+    /// need separate produced/consumed signal fields to avoid mis-attribution.
+    pub signal: Option<SignalType>,
+    /// Number of signal items produced (emitted) by the node at send time.
+    /// Stamped only when the node has `PRODUCER_METRICS` interest. Saturates
+    /// at `u32::MAX`.
+    pub produced_items: u32,
+    /// Number of signal items consumed (received) by the node at receive time.
+    /// Stamped only when the node has `CONSUMER_METRICS` interest. Saturates
+    /// at `u32::MAX`.
+    pub consumed_items: u32,
 }
 
 /// The ACK message.
