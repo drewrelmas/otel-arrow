@@ -366,6 +366,15 @@ impl SegmentStore {
         let _ = segments.remove(&seq);
     }
 
+    /// Returns the persisted file size for a loaded segment.
+    pub fn segment_file_size(&self, seq: SegmentSeq) -> Result<u64> {
+        let segments = self.segments.read();
+        segments
+            .get(&seq)
+            .map(|handle| handle.file_size_bytes)
+            .ok_or_else(|| SubscriberError::segment_not_found(seq.raw()))
+    }
+
     /// Deletes a segment file from disk and removes it from the store.
     ///
     /// This is called when all subscribers have completed consuming a segment
