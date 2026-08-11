@@ -124,7 +124,11 @@ pub(super) struct LossAttributes {
     pub(super) reason: LossReason,
 }
 
+<<<<<<< Updated upstream
 /// Aggregate storage loss metrics partitioned by retention reason.
+=======
+/// Loss metrics partitioned by retention reason.
+>>>>>>> Stashed changes
 #[metric_set(
     name = "processor.durable_buffer.loss",
     measurement_attributes = LossAttributes
@@ -136,10 +140,18 @@ pub(super) struct DurableBufferLossMetrics {
     pub(super) segments: ObserveCounter<u64>,
     /// Number of bundles lost.
     #[metric(unit = "{bundle}")]
+<<<<<<< Updated upstream
     pub(super) bundles: ObserveCounter<u64>,
     /// Number of items lost.
     #[metric(unit = "{item}")]
     pub(super) items: ObserveCounter<u64>,
+    /// Full persisted segment bytes lost.
+=======
+    pub(super) bundles: Counter<u64>,
+    /// Persisted segment bytes lost.
+>>>>>>> Stashed changes
+    #[metric(unit = "By")]
+    pub(super) bytes: Counter<u64>,
 }
 
 #[attribute_set(item, measurement)]

@@ -252,6 +252,31 @@ struct CachedSegmentMetrics {
     last_seen_generation: u64,
 }
 
+<<<<<<< Updated upstream
+=======
+fn retention_loss_delta(
+    current: RetentionLossSnapshot,
+    previous: RetentionLossSnapshot,
+) -> RetentionLossSnapshot {
+    fn counts_delta(
+        current: RetentionLossCounts,
+        previous: RetentionLossCounts,
+    ) -> RetentionLossCounts {
+        RetentionLossCounts {
+            segments: current.segments.saturating_sub(previous.segments),
+            bundles: current.bundles.saturating_sub(previous.bundles),
+            items: current.items.saturating_sub(previous.items),
+            bytes: current.bytes.saturating_sub(previous.bytes),
+        }
+    }
+
+    RetentionLossSnapshot {
+        drop_oldest: counts_delta(current.drop_oldest, previous.drop_oldest),
+        expired: counts_delta(current.expired, previous.expired),
+    }
+}
+
+>>>>>>> Stashed changes
 /// Durable buffer that provides crash-resilient buffering via Quiver.
 ///
 /// # Segment Metrics Cache
@@ -311,6 +336,12 @@ pub struct DurableBuffer {
     /// Prevents warning spam when `bundle_metadata` repeatedly fails for the
     /// same segment across telemetry ticks.
     metadata_load_warned_segments: HashSet<u64>,
+
+    /// Most recently reported cumulative dropped segment bytes.
+    last_dropped_bytes: u64,
+
+    /// Most recently reported cumulative expired segment bytes.
+    last_expired_bytes: u64,
 }
 
 impl DurableBuffer {
@@ -376,6 +407,8 @@ impl DurableBuffer {
             segment_cache: HashMap::new(),
             segment_cache_generation: 0,
             metadata_load_warned_segments: HashSet::new(),
+            last_dropped_bytes: 0,
+            last_expired_bytes: 0,
         })
     }
 
@@ -766,6 +799,63 @@ impl DurableBuffer {
         self.segment_cache
             .retain(|seq, _| progress_snapshot.contains_key(&SegmentSeq::new(*seq)));
 
+<<<<<<< Updated upstream
+        self.recompute_loss_metrics(engine);
+=======
+        let current_loss_snapshot = engine.retention_loss_snapshot();
+        let loss_delta = retention_loss_delta(current_loss_snapshot, self.last_loss_snapshot);
+        self.last_loss_snapshot = current_loss_snapshot;
+
+        let dropped = self.metrics.loss_for(LossReason::DropOldest);
+        dropped.segments.add(loss_delta.drop_oldest.segments);
+        dropped.bundles.add(loss_delta.drop_oldest.bundles);
+        dropped.bytes.add(loss_delta.drop_oldest.bytes);
+
+        let expired = self.metrics.loss_for(LossReason::Expired);
+        expired.segments.add(loss_delta.expired.segments);
+        expired.bundles.add(loss_delta.expired.bundles);
+        expired.bytes.add(loss_delta.expired.bytes);
+
+        // Classify Quiver's opaque slot shapes in the OTAP layer, where signal
+        // semantics are known.
+        for (slot_ids, item_count) in engine.drain_dropped_items_by_shape() {
+            if let Some(signal) = slot_ids.iter().copied().find_map(signal_type_from_slot_id) {
+                self.metrics
+                    .loss_items_for(signal, LossReason::DropOldest)
+                    .items
+                    .add(item_count);
+            }
+        }
+
+        for (slot_ids, item_count) in engine.drain_expired_items_by_shape() {
+            if let Some(signal) = slot_ids.iter().copied().find_map(signal_type_from_slot_id) {
+                self.metrics
+                    .loss_items_for(signal, LossReason::Expired)
+                    .items
+                    .add(item_count);
+            }
+        }
+>>>>>>> Stashed changes
+
+        self.metadata_load_warned_segments
+            .retain(|seq| progress_snapshot.contains_key(&SegmentSeq::new(*seq)));
+        self.enforce_segment_cache_bound();
+
+        self.metrics
+            .items_for_signal(SignalType::Logs)
+            .queued
+            .set(logs);
+        self.metrics
+            .items_for_signal(SignalType::Metrics)
+            .queued
+            .set(metrics);
+        self.metrics
+            .items_for_signal(SignalType::Traces)
+            .queued
+            .set(spans);
+    }
+
+    fn recompute_loss_metrics(&mut self, engine: &QuiverEngine) {
         // NOTE (temporality inconsistency): these aggregate loss metrics are
         // still cumulative ObserveCounters sourced from monotonic engine atomics
         // via .observe(), so the dispatcher exports them as gauges regardless of
@@ -787,6 +877,12 @@ impl DurableBuffer {
             .loss_for(LossReason::DropOldest)
             .items
             .observe(engine.force_dropped_items());
+        let dropped_bytes = engine.force_dropped_bytes();
+        self.metrics
+            .loss_for(LossReason::DropOldest)
+            .bytes
+            .add(dropped_bytes.saturating_sub(self.last_dropped_bytes));
+        self.last_dropped_bytes = dropped_bytes;
         self.metrics
             .loss_for(LossReason::Expired)
             .segments
@@ -799,6 +895,12 @@ impl DurableBuffer {
             .loss_for(LossReason::Expired)
             .items
             .observe(engine.expired_items());
+        let expired_bytes = engine.expired_bytes();
+        self.metrics
+            .loss_for(LossReason::Expired)
+            .bytes
+            .add(expired_bytes.saturating_sub(self.last_expired_bytes));
+        self.last_expired_bytes = expired_bytes;
 
         // Update dropped and expired metrics by draining the engine's pending bundles
         // and aggregating by signal type via signal_type_from_slot_id(). This handles all
@@ -820,23 +922,6 @@ impl DurableBuffer {
                     .add(count);
             }
         }
-
-        self.metadata_load_warned_segments
-            .retain(|seq| progress_snapshot.contains_key(&SegmentSeq::new(*seq)));
-        self.enforce_segment_cache_bound();
-
-        self.metrics
-            .items_for_signal(SignalType::Logs)
-            .queued
-            .set(logs);
-        self.metrics
-            .items_for_signal(SignalType::Metrics)
-            .queued
-            .set(metrics);
-        self.metrics
-            .items_for_signal(SignalType::Traces)
-            .queued
-            .set(spans);
     }
 
     /// Initialize the Quiver engine and subscriber.
@@ -1711,6 +1796,9 @@ impl DurableBuffer {
                 otel_info!("durable_buffer.shutdown.complete");
             }
         }
+
+        let engine = self.engine()?.0.clone();
+        self.recompute_loss_metrics(&engine);
 
         Ok(())
     }
@@ -2938,6 +3026,137 @@ mod tests {
         engine.flush().await.unwrap();
         assert_eq!(engine.force_drop_oldest_pending_segments(), 1);
         assert_eq!(sample(&mut processor), (4, 0));
+    }
+
+<<<<<<< Updated upstream
+    /// Scenario: A confirmed retention deletion is folded more than once.
+    /// Guarantees: The processor byte counter adds the engine delta exactly once.
+    #[tokio::test]
+    async fn test_loss_byte_metrics_fold_engine_deltas_once() {
+        let (mut processor, engine, _subscriber_id, _temp_dir) = setup_test_processor(None).await;
+=======
+    /// Scenario: Segment, bundle, and byte loss occur in separate reporting intervals.
+    /// Guarantees: Each reason-only aggregate counter reports its delta and resets after export.
+    #[tokio::test]
+    async fn test_aggregate_loss_metrics_are_delta_counters() {
+        let (mut processor, engine, subscriber_id, _temp_dir) =
+            setup_test_processor(Some(Duration::from_millis(5))).await;
+        let (metrics_rx, mut reporter) = MetricsReporter::create_new_and_receiver(4);
+
+        let mut sample = |processor: &mut DurableBuffer| {
+            processor.recompute_metrics(&engine, &subscriber_id);
+            let dropped = processor.metrics.loss_metrics.get(LossAttributes {
+                reason: LossReason::DropOldest,
+            });
+            let dropped_values = (
+                dropped.segments.get(),
+                dropped.bundles.get(),
+                dropped.bytes.get(),
+            );
+            let expired = processor.metrics.loss_metrics.get(LossAttributes {
+                reason: LossReason::Expired,
+            });
+            let expired_values = (
+                expired.segments.get(),
+                expired.bundles.get(),
+                expired.bytes.get(),
+            );
+
+            reporter
+                .report_measurement(&mut processor.metrics.loss_metrics)
+                .expect("report loss metrics");
+            while metrics_rx.try_recv().is_ok() {}
+
+            (dropped_values, expired_values)
+        };
+>>>>>>> Stashed changes
+
+        engine
+            .ingest(&make_simple_bundle(SlotId::new(30), 5))
+            .await
+<<<<<<< Updated upstream
+            .expect("ingest");
+        engine.flush().await.expect("flush");
+        let segment = engine
+            .segment_store()
+            .segment_sequences()
+            .into_iter()
+            .next()
+            .expect("segment");
+        let expected_bytes = engine
+            .segment_store()
+            .segment_file_size(segment)
+            .expect("segment file size");
+
+        assert_eq!(engine.force_drop_oldest_pending_segments(), 1);
+
+        processor.recompute_loss_metrics(&engine);
+=======
+            .expect("ingest dropped bundle");
+        engine.flush().await.expect("flush dropped bundle");
+        let dropped_bytes = engine
+            .segment_store()
+            .segment_sequences()
+            .into_iter()
+            .min()
+            .map(|seq| {
+                engine
+                    .segment_store()
+                    .segment_file_size(seq)
+                    .expect("segment file size")
+            })
+            .expect("oldest segment");
+        assert_eq!(engine.force_drop_oldest_pending_segments(), 1);
+        assert_eq!(sample(&mut processor), ((1, 1, dropped_bytes), (0, 0, 0)));
+
+        engine
+            .ingest(&make_simple_bundle(SlotId::new(30), 3))
+            .await
+            .expect("ingest expired bundle");
+        engine.flush().await.expect("flush expired bundle");
+        let expired_bytes = engine
+            .segment_store()
+            .segment_sequences()
+            .into_iter()
+            .map(|seq| {
+                engine
+                    .segment_store()
+                    .segment_file_size(seq)
+                    .expect("segment file size")
+            })
+            .sum::<u64>();
+        tokio::time::sleep(Duration::from_millis(20)).await;
+>>>>>>> Stashed changes
+        assert_eq!(
+            processor
+                .metrics
+                .loss_metrics
+                .get(LossAttributes {
+                    reason: LossReason::DropOldest,
+                })
+                .bytes
+                .get(),
+            expected_bytes
+        );
+<<<<<<< Updated upstream
+
+        processor.recompute_loss_metrics(&engine);
+        assert_eq!(
+            processor
+                .metrics
+                .loss_metrics
+                .get(LossAttributes {
+                    reason: LossReason::DropOldest,
+                })
+                .bytes
+                .get(),
+            expected_bytes
+        );
+=======
+        assert_eq!(sample(&mut processor), ((0, 0, 0), (1, 1, expired_bytes)));
+
+        assert_eq!(sample(&mut processor), ((0, 0, 0), (0, 0, 0)));
+>>>>>>> Stashed changes
     }
 
     #[tokio::test]

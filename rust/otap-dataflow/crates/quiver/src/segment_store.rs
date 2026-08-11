@@ -17,7 +17,7 @@ use parking_lot::{Mutex, RwLock};
 use crate::budget::DiskBudget;
 use crate::logging::{otel_debug, otel_error, otel_warn};
 use crate::segment::{ReconstructedBundle, SegmentReader, SegmentSeq};
-use crate::subscriber::{BundleIndex, BundleRef, SegmentProvider, SubscriberError};
+use crate::subscriber::{BundleIndex, BundleMetadata, BundleRef, SegmentProvider, SubscriberError};
 
 /// Maximum number of maintenance cycles a pending delete is retried before
 /// the entry is abandoned and the budget is forcibly released.
@@ -55,19 +55,54 @@ struct PendingDelete {
     next_retry_at: Instant,
 }
 
+/// Outcome of an attempted segment deletion.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SegmentDeleteOutcome {
+    /// The file was removed or confirmed already absent.
+    Deleted,
+    /// The file remains on disk and was scheduled for retry.
+    Deferred,
+}
+
+/// Confirmed and abandoned deferred deletions from one retry pass.
+#[derive(Debug, Default)]
+pub(crate) struct PendingDeleteResults {
+    /// Segment files removed or confirmed already absent.
+    pub(crate) deleted: Vec<SegmentSeq>,
+    /// Segment files abandoned after exhausting retries.
+    pub(crate) abandoned: Vec<SegmentSeq>,
+}
+
+/// Metadata for a segment deleted by startup retention.
+#[derive(Debug)]
+pub struct DeletedSegment {
+    /// Deleted segment sequence.
+    pub sequence: SegmentSeq,
+    /// Full persisted segment file size.
+    pub file_size_bytes: u64,
+    /// Number of bundles stored in the segment.
+    pub bundle_count: u32,
+    /// Number of logical items stored in the segment.
+    pub item_count: u64,
+    /// Per-bundle item and slot metadata.
+    pub bundle_metadata: Vec<BundleMetadata>,
+}
+
 /// Result of scanning the segment directory during startup.
 ///
 /// Contains both the segments that were successfully loaded and the
-/// sequence numbers of segments that were deleted due to expiration.
-/// The deleted IDs are needed so the subscriber registry can mark them
-/// as completed, preventing subscribers from trying to read missing files.
+/// metadata for segments deleted due to expiration. The deleted IDs are
+/// needed so the subscriber registry can mark them as completed, preventing
+/// subscribers from trying to read missing files.
 #[derive(Debug, Default)]
 pub struct ScanResult {
     /// Segments that were found and registered, sorted by sequence number.
     /// Each entry contains the segment sequence and its bundle count.
     pub found: Vec<(SegmentSeq, u32)>,
-    /// Segment sequences that were deleted during scan (e.g., expired by max_age).
-    pub deleted: Vec<SegmentSeq>,
+    /// Segments deleted during scan (e.g., expired by max_age).
+    pub deleted: Vec<DeletedSegment>,
+    /// Highest parsed segment sequence, including retained inaccessible files.
+    pub highest_sequence: Option<SegmentSeq>,
 }
 
 /// Type alias for subscriber-related results.
@@ -366,6 +401,15 @@ impl SegmentStore {
         let _ = segments.remove(&seq);
     }
 
+    /// Returns the persisted file size for a loaded segment.
+    pub fn segment_file_size(&self, seq: SegmentSeq) -> Result<u64> {
+        let segments = self.segments.read();
+        segments
+            .get(&seq)
+            .map(|handle| handle.file_size_bytes)
+            .ok_or_else(|| SubscriberError::segment_not_found(seq.raw()))
+    }
+
     /// Deletes a segment file from disk and removes it from the store.
     ///
     /// This is called when all subscribers have completed consuming a segment
@@ -377,6 +421,14 @@ impl SegmentStore {
     /// to a pending-delete list and the budget is released later when
     /// [`retry_pending_deletes`](Self::retry_pending_deletes) succeeds.
     pub fn delete_segment(&self, seq: SegmentSeq) -> std::io::Result<()> {
+        self.delete_segment_with_outcome(seq).map(|_| ())
+    }
+
+    /// Deletes a segment and reports whether physical removal was confirmed.
+    pub(crate) fn delete_segment_with_outcome(
+        &self,
+        seq: SegmentSeq,
+    ) -> std::io::Result<SegmentDeleteOutcome> {
         // Remove from in-memory map and capture file size for budget accounting.
         let file_size = {
             let mut segments = self.segments.write();
@@ -392,12 +444,14 @@ impl SegmentStore {
                     if let (Some(budget), Some(size)) = (&self.budget, file_size) {
                         budget.remove(size);
                     }
+                    return Ok(SegmentDeleteOutcome::Deleted);
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                     // Raced with external deletion -- file is gone, release budget.
                     if let (Some(budget), Some(size)) = (&self.budget, file_size) {
                         budget.remove(size);
                     }
+                    return Ok(SegmentDeleteOutcome::Deleted);
                 }
                 Err(e) => {
                     // File still on disk (sharing violation, permission error, etc.).
@@ -420,6 +474,7 @@ impl SegmentStore {
                         );
                     }
                     self.defer_delete(seq, file_size.unwrap_or(0));
+                    return Ok(SegmentDeleteOutcome::Deferred);
                 }
             }
         } else {
@@ -429,7 +484,16 @@ impl SegmentStore {
             }
         }
 
-        Ok(())
+        Ok(SegmentDeleteOutcome::Deleted)
+    }
+
+    /// Returns the persisted file size for a loaded segment.
+    pub fn segment_file_size(&self, segment_seq: SegmentSeq) -> Result<u64> {
+        let segments = self.segments.read();
+        segments
+            .get(&segment_seq)
+            .map(|handle| handle.file_size_bytes)
+            .ok_or_else(|| SubscriberError::segment_not_found(segment_seq.raw()))
     }
 
     /// Schedules deferred cleanup of an orphaned segment file.
@@ -493,9 +557,15 @@ impl SegmentStore {
     /// callers can invoke this method on every ingest cycle without
     /// hammering the filesystem.
     ///
-    /// Returns the number of segments whose budget was released (successful
-    /// deletes + abandoned entries).
+    /// Returns the number of entries cleared by confirmed deletion or
+    /// abandonment after exhausting retries.
     pub fn retry_pending_deletes(&self) -> usize {
+        let results = self.retry_pending_deletes_with_sequences();
+        results.deleted.len() + results.abandoned.len()
+    }
+
+    /// Retries pending deletions and returns their segment sequences.
+    pub(crate) fn retry_pending_deletes_with_sequences(&self) -> PendingDeleteResults {
         let now = Instant::now();
         let pending: Vec<(SegmentSeq, PendingDelete)> = {
             let pending = self.pending_deletes.lock();
@@ -507,10 +577,10 @@ impl SegmentStore {
         };
 
         if pending.is_empty() {
-            return 0;
+            return PendingDeleteResults::default();
         }
 
-        let mut cleared = 0;
+        let mut results = PendingDeleteResults::default();
         for (seq, pd) in pending {
             let path = self.segment_path(seq);
             if !path.exists() {
@@ -519,7 +589,7 @@ impl SegmentStore {
                 if let Some(budget) = &self.budget {
                     budget.remove(pd.file_size);
                 }
-                cleared += 1;
+                results.deleted.push(seq);
                 continue;
             }
 
@@ -535,7 +605,7 @@ impl SegmentStore {
                         phase = "deferred",
                         message = "Successfully deleted deferred segment on retry",
                     );
-                    cleared += 1;
+                    results.deleted.push(seq);
                 }
                 Err(e) if Self::is_sharing_violation(&e) => {
                     // Still in use -- schedule next retry with backoff.
@@ -597,11 +667,11 @@ impl SegmentStore {
                     message = "Giving up on segment deletion after max retries; \
                                budget released but file may remain on disk",
                 );
-                cleared += 1;
+                results.abandoned.push(seq);
             }
         }
 
-        cleared
+        results
     }
 
     /// Returns the number of segments pending deletion.
@@ -648,6 +718,7 @@ impl SegmentStore {
     pub fn scan_existing_with_max_age(&self, max_age: Option<Duration>) -> Result<ScanResult> {
         let mut found = Vec::new();
         let mut deleted = Vec::new();
+        let mut highest_sequence: Option<SegmentSeq> = None;
         let now = SystemTime::now();
 
         // Pre-compute cutoff time: segments modified before this are expired.
@@ -668,11 +739,50 @@ impl SegmentStore {
             let path = entry.path();
             if path.extension().is_some_and(|ext| ext == "qseg") {
                 if let Some(seq) = Self::parse_segment_filename(&path) {
+                    highest_sequence =
+                        Some(highest_sequence.map_or(seq, |highest| highest.max(seq)));
                     // Check if segment is expired before loading
                     if let Some(cutoff) = cutoff {
                         if Self::is_file_before_cutoff(&path, cutoff) {
                             // Delete expired segment without loading it.
                             // No budget release needed - file was never registered.
+                            let handle = match SegmentHandle::open(
+                                seq,
+                                path.clone(),
+                                self.read_mode,
+                            ) {
+                                Ok(handle) => handle,
+                                Err(e) => {
+                                    if let Ok(metadata) = std::fs::metadata(&path)
+                                        && let Some(budget) = &self.budget
+                                    {
+                                        budget.add(metadata.len());
+                                    }
+                                    otel_warn!(
+                                        "quiver.segment.scan",
+                                        path = %path.display(),
+                                        error = %e,
+                                        message = "expired segment could not be inspected and was retained",
+                                    );
+                                    continue;
+                                }
+                            };
+                            let deleted_segment = DeletedSegment {
+                                sequence: seq,
+                                file_size_bytes: handle.file_size_bytes,
+                                bundle_count: handle.bundle_count,
+                                item_count: handle.total_item_count,
+                                bundle_metadata: handle
+                                    .reader
+                                    .manifest()
+                                    .iter()
+                                    .map(|entry| BundleMetadata {
+                                        item_count: entry.item_count(),
+                                        slot_ids: entry.slot_ids().collect(),
+                                    })
+                                    .collect(),
+                            };
+                            drop(handle);
                             if let Err(e) = Self::remove_readonly_file(&path) {
                                 otel_warn!(
                                     "quiver.segment.scan",
@@ -680,9 +790,23 @@ impl SegmentStore {
                                     error = %e,
                                     error_type = "io",
                                 );
+                                match self.register_existing_segment(seq) {
+                                    Ok(bundle_count) => found.push((seq, bundle_count)),
+                                    Err(register_error) => {
+                                        if let Some(budget) = &self.budget {
+                                            budget.add(deleted_segment.file_size_bytes);
+                                        }
+                                        otel_warn!(
+                                            "quiver.segment.scan",
+                                            path = %path.display(),
+                                            error = %register_error,
+                                            message = "retained expired segment could not be registered",
+                                        );
+                                    }
+                                }
                             } else {
                                 otel_debug!("quiver.segment.scan", segment = seq.raw(),);
-                                deleted.push(seq);
+                                deleted.push(deleted_segment);
                             }
                             continue;
                         }
@@ -706,9 +830,13 @@ impl SegmentStore {
 
         // Sort by sequence number
         found.sort_by_key(|(seq, _)| *seq);
-        deleted.sort();
+        deleted.sort_by_key(|segment| segment.sequence);
 
-        Ok(ScanResult { found, deleted })
+        Ok(ScanResult {
+            found,
+            deleted,
+            highest_sequence,
+        })
     }
 
     /// Checks if a file's modification time is before the cutoff time.
@@ -820,10 +948,7 @@ impl SegmentProvider for SegmentStore {
             .unwrap_or(0))
     }
 
-    fn bundle_metadata(
-        &self,
-        segment_seq: SegmentSeq,
-    ) -> Result<Vec<crate::subscriber::BundleMetadata>> {
+    fn bundle_metadata(&self, segment_seq: SegmentSeq) -> Result<Vec<BundleMetadata>> {
         let segments = self.segments.read();
         let handle = segments
             .get(&segment_seq)
@@ -833,7 +958,7 @@ impl SegmentProvider for SegmentStore {
             .reader
             .manifest()
             .iter()
-            .map(|entry| crate::subscriber::BundleMetadata {
+            .map(|entry| BundleMetadata {
                 item_count: entry.item_count(),
                 slot_ids: entry.slot_ids().collect(),
             })
@@ -900,6 +1025,33 @@ mod tests {
         // Extension filtering (.qseg) is done by scan_existing().
         let seq = SegmentStore::parse_segment_filename(Path::new("0000000000000001.txt"));
         assert_eq!(seq, Some(SegmentSeq::new(1)));
+    }
+
+    /// Scenario: Startup finds an expired segment whose contents cannot be inspected.
+    /// Guarantees: The retained file reserves its sequence and remains charged to the budget.
+    #[test]
+    fn scan_retained_inaccessible_segment_preserves_watermark_and_budget() {
+        let dir = tempdir().expect("tempdir");
+        let segment_dir = dir.path().join("segments");
+        std::fs::create_dir_all(&segment_dir).expect("create segment directory");
+        let segment_path = segment_dir.join("0000000000000042.qseg");
+        let contents = b"not a valid segment";
+        std::fs::write(&segment_path, contents).expect("write invalid segment");
+        std::thread::sleep(Duration::from_millis(5));
+
+        let budget = Arc::new(DiskBudget::new(1024, 512, RetentionPolicy::Backpressure));
+        let store =
+            SegmentStore::with_budget(&segment_dir, SegmentReadMode::Standard, budget.clone());
+
+        let result = store
+            .scan_existing_with_max_age(Some(Duration::from_millis(1)))
+            .expect("scan");
+
+        assert!(result.found.is_empty());
+        assert!(result.deleted.is_empty());
+        assert_eq!(result.highest_sequence, Some(SegmentSeq::new(42)));
+        assert_eq!(budget.used(), contents.len() as u64);
+        assert!(segment_path.exists());
     }
 
     #[test]
@@ -1248,7 +1400,7 @@ mod tests {
         assert_eq!(budget.used(), file_size);
 
         // Delete the segment -- file should be removed and budget released.
-        store.delete_segment(seq).unwrap();
+        let _ = store.delete_segment(seq).unwrap();
         assert_eq!(
             budget.used(),
             0,
@@ -1270,7 +1422,7 @@ mod tests {
         std::fs::remove_file(&path).unwrap();
 
         // delete_segment should still release budget (file doesn't exist on disk).
-        store.delete_segment(seq).unwrap();
+        let _ = store.delete_segment(seq).unwrap();
         assert_eq!(
             budget.used(),
             0,
@@ -1384,7 +1536,7 @@ mod tests {
         std::fs::write(&path, "test data").unwrap();
 
         // delete_segment should succeed without a budget configured.
-        store.delete_segment(seq).unwrap();
+        let _ = store.delete_segment(seq).unwrap();
         assert!(!path.exists());
         assert_eq!(store.pending_delete_count(), 0);
     }
