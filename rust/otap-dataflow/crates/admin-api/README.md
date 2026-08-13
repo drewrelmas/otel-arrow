@@ -1,6 +1,6 @@
 # Admin API SDK
 
-`otap-df-admin-api` is the public Rust integration crate for the OTAP Dataflow
+`otel-arrow-dfe-admin-api` is the public Rust integration crate for the OTAP Dataflow
 Engine admin surface. External applications should depend on this crate rather
 than the server implementation crate.
 
@@ -39,7 +39,7 @@ Default SDK usage is usually enough:
 
 ```toml
 [dependencies]
-otap-df-admin-api = "0.1.0"
+otel-arrow-dfe-admin-api = "0.1.0"
 ```
 
 This enables:
@@ -52,7 +52,7 @@ prefer enabling a single provider feature explicitly:
 
 ```toml
 [dependencies]
-otap-df-admin-api = { version = "0.1.0", default-features = false, features = ["http-client", "crypto-aws-lc"] }
+otel-arrow-dfe-admin-api = { version = "0.1.0", default-features = false, features = ["http-client", "crypto-aws-lc"] }
 ```
 
 Available provider features:
@@ -69,7 +69,7 @@ For FIPS-oriented deployments, start with:
 
 ```toml
 [dependencies]
-otap-df-admin-api = { version = "0.1.0", default-features = false, features = ["http-client", "crypto-openssl"] }
+otel-arrow-dfe-admin-api = { version = "0.1.0", default-features = false, features = ["http-client", "crypto-openssl"] }
 ```
 
 Important note:

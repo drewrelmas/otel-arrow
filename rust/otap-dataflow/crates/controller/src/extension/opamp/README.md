@@ -55,7 +55,7 @@ so this payload preserves both pipelines from the startup config while changing
             "heartbeat_interval": "5s",
             "agent_description": {
               "identifying_attributes": {
-                "service.name": "otap-df-engine"
+                "service.name": "otel-arrow-dfe-engine"
               }
             }
           }

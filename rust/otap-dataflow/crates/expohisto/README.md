@@ -1,4 +1,4 @@
-# otap-df-expohisto
+# otel-arrow-dfe-expohisto
 
 An OpenTelemetry exponential histogram aggregator.
 

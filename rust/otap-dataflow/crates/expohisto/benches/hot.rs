@@ -19,7 +19,7 @@
 //! Run with:
 //!
 //! ```text
-//! cargo bench -p otap-df-expohisto --bench hot
+//! cargo bench -p otel-arrow-dfe-expohisto --bench hot
 //! ```
 
 use otap_df_expohisto::{HistogramNN, Scale, Width, table_scale};

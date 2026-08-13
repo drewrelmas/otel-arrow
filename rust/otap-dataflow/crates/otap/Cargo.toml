@@ -1,5 +1,5 @@
 [package]
-name = "otap-df-otap"
+name = "otel-arrow-dfe-otap"
 description = "OTAP nodes"
 version.workspace = true
 authors.workspace = true

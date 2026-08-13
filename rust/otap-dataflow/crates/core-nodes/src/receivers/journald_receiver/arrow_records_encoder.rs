@@ -145,9 +145,10 @@ impl JournaldArrowRecordsBuilder {
             .append_dropped_attributes_count_n(0, log_record_count);
 
         self.logs.scope.append_id_n(0, log_record_count);
-        self.logs
-            .scope
-            .append_name_n(Some(b"otap-df-core-nodes/journald"), log_record_count);
+        self.logs.scope.append_name_n(
+            Some(b"otel-arrow-dfe-core-nodes/journald"),
+            log_record_count,
+        );
         self.logs
             .scope
             .append_version_n(Some(env!("CARGO_PKG_VERSION").as_bytes()), log_record_count);

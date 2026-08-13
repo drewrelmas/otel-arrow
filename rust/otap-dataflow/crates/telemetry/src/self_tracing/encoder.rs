@@ -861,13 +861,13 @@ mod tests {
         // is conveyed via InstrumentationScope.name. See
         // encode_event_name + encode_export_logs_request.
         assert_eq!(event_name, "test.scope.encoding");
-        assert_eq!(scope.name, "otap-df-telemetry");
+        assert_eq!(scope.name, "otel-arrow-dfe-telemetry");
 
         let expected = ExportLogsServiceRequest::new([ResourceLogs::new(
             Resource::build().finish(),
             [ScopeLogs::new(
                 InstrumentationScope::build()
-                    .name("otap-df-telemetry")
+                    .name("otel-arrow-dfe-telemetry")
                     .attributes([
                         KeyValue::new("pipeline.name", AnyValue::new_string("my-pipeline")),
                         KeyValue::new("cpu.id", AnyValue::new_int(3)),
@@ -886,7 +886,7 @@ mod tests {
         assert_eq!(
             format_log_record_to_string(None, &log_event.record),
             format!(
-                "INFO  otap-df-telemetry::{event_name} entity={:?}\n",
+                "INFO  otel-arrow-dfe-telemetry::{event_name} entity={:?}\n",
                 entity_key
             ),
         );
@@ -963,14 +963,14 @@ mod tests {
             .expect("scope present");
         let event_name = &decoded.resource_logs[0].scope_logs[0].log_records[0].event_name;
         assert_eq!(event_name, "test.map.encoding");
-        assert_eq!(scope.name, "otap-df-telemetry");
+        assert_eq!(scope.name, "otel-arrow-dfe-telemetry");
 
         // BTreeMap iterates in sorted key order: "priority" before "region".
         let expected = ExportLogsServiceRequest::new([ResourceLogs::new(
             Resource::build().finish(),
             [ScopeLogs::new(
                 InstrumentationScope::build()
-                    .name("otap-df-telemetry")
+                    .name("otel-arrow-dfe-telemetry")
                     .attributes([KeyValue::new(
                         "custom",
                         AnyValue::new_kvlist(vec![
@@ -1221,7 +1221,7 @@ mod tests {
 
     static DEBUG_TEST_METADATA: tracing::Metadata<'static> = tracing::Metadata::new(
         "debug_test",
-        "otap-df-telemetry",
+        "otel-arrow-dfe-telemetry",
         Level::INFO,
         Some(file!()),
         Some(line!()),
@@ -1260,7 +1260,7 @@ mod tests {
 
     static BUDGET_TEST_METADATA: tracing::Metadata<'static> = tracing::Metadata::new(
         "budget_test",
-        "otap-df-telemetry",
+        "otel-arrow-dfe-telemetry",
         Level::INFO,
         Some(file!()),
         Some(line!()),

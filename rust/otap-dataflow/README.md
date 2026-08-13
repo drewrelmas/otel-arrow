@@ -158,7 +158,7 @@ All gRPC services are implemented using
 
 The major OTAP Dataflow components related to OTAP/OTLP pipeline transport are
 listed next. Their concrete core-node implementations now live in
-`otap-df-core-nodes`.
+`otel-arrow-dfe-core-nodes`.
 
 #### Attributes processor
 
@@ -187,7 +187,7 @@ A simple component to produce synthetic data from semantic convention registries
 #### Batch processor
 
 A batching processor that works directly with OTAP records. This is
-[based on lower-level support in the `otap-df-pdata`
+[based on lower-level support in the `otel-arrow-dfe-pdata`
 crate](./crates/pdata/src/otap/batching.rs).
 
 #### OTAP exporter
@@ -267,7 +267,7 @@ establish the performance of the OTAP Dataflow system.
 
 [See crate README.](./crates/contrib-nodes/README.md)
 
-The `otap-df-contrib-nodes` crate contains optional, feature-gated
+The `otel-arrow-dfe-contrib-nodes` crate contains optional, feature-gated
 exporters and processors that are registered into the OTAP pipeline
 factory maps when enabled.
 

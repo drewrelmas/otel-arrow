@@ -72,7 +72,7 @@ const CONTROL_EXTENSION_URN: &str = "urn:otel:extension:opamp";
 
 /// Custom capability type - represents the custom message which can be sent by this OpAMP agent
 /// implementation containing the full pipeline status.
-const CUSTOM_CAPABILITY_STATUS: &str = "io.opentelemetry.otap-dfe.pipeline-status/v1";
+const CUSTOM_CAPABILITY_STATUS: &str = "io.opentelemetry.otel-arrow-dfee.pipeline-status/v1";
 
 /// Header prepended to every OpAMP WebSocket message. Per the OpAMP spec, each WebSocket
 /// message is a varint-encoded unsigned 64 bit integer header (currently always zero)

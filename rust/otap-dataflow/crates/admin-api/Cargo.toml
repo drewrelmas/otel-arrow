@@ -1,5 +1,5 @@
 [package]
-name = "otap-df-admin-api"
+name = "otel-arrow-dfe-admin-api"
 description = "Public admin API and SDK for the OTAP dataflow engine"
 version.workspace = true
 authors.workspace = true

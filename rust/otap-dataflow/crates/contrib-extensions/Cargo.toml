@@ -1,5 +1,5 @@
 [package]
-name = "otap-df-contrib-extensions"
+name = "otel-arrow-dfe-contrib-extensions"
 description = "OTAP Contrib extensions"
 version.workspace = true
 authors.workspace = true

@@ -1,5 +1,5 @@
 [package]
-name = "otap-df-wasm-host"
+name = "otel-arrow-dfe-wasm-host"
 description = "WASM host-kernel runtime for OTAP dataflow processor plugins (experimental)"
 version.workspace = true
 authors.workspace = true

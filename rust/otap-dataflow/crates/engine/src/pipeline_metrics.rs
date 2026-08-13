@@ -786,7 +786,7 @@ mod jemalloc_tests {
     // tikv_jemalloc_ctl can read per-thread allocation counters.
     //
     // Run this test with:
-    // `cargo test -p otap-df-engine --lib --features jemalloc-testing pipeline_metrics_monitor_black_box_updates_jemalloc`
+    // `cargo test -p otel-arrow-dfe-engine --lib --features jemalloc-testing pipeline_metrics_monitor_black_box_updates_jemalloc`
     #[global_allocator]
     static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 

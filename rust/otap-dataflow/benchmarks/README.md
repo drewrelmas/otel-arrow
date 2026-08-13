@@ -38,7 +38,7 @@ Example:
 
 ```toml
 [dependencies]
-otap-df-config = { path = "../crates/config" }
+otel-arrow-dfe-config = { path = "../crates/config" }
 ```
 
 #### 2. Add a [[bench]] entry for the benchmark target

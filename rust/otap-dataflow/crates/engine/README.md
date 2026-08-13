@@ -2,7 +2,7 @@
 
 ## Introduction
 
-The `otap-df-engine` crate is the in-core execution engine for OTAP Dataflow.
+The `otel-arrow-dfe-engine` crate is the in-core execution engine for OTAP Dataflow.
 It is responsible for running pipeline nodes, wiring bounded channels, routing
 runtime messages, and enforcing the engine's drain and shutdown behavior inside
 one pipeline runtime.

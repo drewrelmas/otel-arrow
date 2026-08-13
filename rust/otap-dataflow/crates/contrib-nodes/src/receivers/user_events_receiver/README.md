@@ -674,7 +674,7 @@ receiver, the debug processor, and the noop exporter:
 
 ```bash
 cargo build --features user_events-receiver
-cargo build -p otap-df-contrib-nodes \
+cargo build -p otel-arrow-dfe-contrib-nodes \
   --features user_events-receiver \
   --example user_events_tracefs_producer
 
@@ -701,7 +701,7 @@ and debug processor path:
 
 ```bash
 cargo build --features user_events-eventheader
-cargo build -p otap-df-contrib-nodes \
+cargo build -p otel-arrow-dfe-contrib-nodes \
   --features user_events-eventheader \
   --example user_events_eventheader_producer
 

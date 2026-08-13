@@ -134,7 +134,7 @@ pub fn pipeline_factory(args: TokenStream, input: TokenStream) -> TokenStream {
 /// Each capability must be defined in its own file under `capability/` to
 /// avoid `mod local` / `mod shared` name collisions. The macro generates
 /// `crate::capability::*` paths, so it can only be invoked from within the
-/// `otap-df-engine` crate.
+/// `otel-arrow-dfe-engine` crate.
 #[proc_macro_attribute]
 pub fn capability(args: TokenStream, input: TokenStream) -> TokenStream {
     let args = parse_macro_input!(args as capability::CapabilityArgs);

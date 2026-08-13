@@ -1,4 +1,4 @@
-# otap-df-wasm-host
+# otel-arrow-dfe-wasm-host
 
 WASM host-kernel runtime for OTAP dataflow processor plugins.
 
@@ -29,7 +29,7 @@ generated bindings, native kernels, the `OtapPdata` bridge, and the
 which is **off by default**:
 
 ```toml
-otap-df-wasm-host = { workspace = true, features = ["wasm"] }
+otel-arrow-dfe-wasm-host = { workspace = true, features = ["wasm"] }
 ```
 
 With the feature off, the crate compiles to an empty shell and pulls in no

@@ -14,7 +14,7 @@
 //! PowerShell:
 //!
 //! ```pwsh
-//! cargo test -p otap-df-contrib-nodes --features etw-receiver `
+//! cargo test -p otel-arrow-dfe-contrib-nodes --features etw-receiver `
 //!     etw_receiver_decodes_tracelogging_events_end_to_end `
 //!     -- --ignored --nocapture
 //! ```

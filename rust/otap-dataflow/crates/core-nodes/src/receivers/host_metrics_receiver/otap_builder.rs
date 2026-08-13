@@ -20,7 +20,7 @@ use otap_df_pdata::proto::opentelemetry::arrow::v1::ArrowPayloadType;
 use crate::receivers::host_metrics_receiver::procfs::HostResource;
 use crate::receivers::host_metrics_receiver::semconv;
 
-const SCOPE_NAME: &[u8] = b"otap-df-core-nodes/host-metrics";
+const SCOPE_NAME: &[u8] = b"otel-arrow-dfe-core-nodes/host-metrics";
 const SCOPE_VERSION: &[u8] = env!("CARGO_PKG_VERSION").as_bytes();
 
 // AggregationTemporality::Cumulative = 2 (OTLP proto enum value).

@@ -6,7 +6,7 @@
 //! Run on Linux with a kernel that supports user_events:
 //!
 //! ```bash
-//! cargo run -p otap-df-contrib-nodes \
+//! cargo run -p otel-arrow-dfe-contrib-nodes \
 //!   --features user_events-receiver \
 //!   --example user_events_tracefs_producer
 //! ```

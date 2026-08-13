@@ -1,5 +1,5 @@
 [package]
-name = "otap-df-pdata"
+name = "otel-arrow-dfe-pdata"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true

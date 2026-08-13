@@ -87,7 +87,7 @@ standard OAuth 2.0 endpoints rather than Azure identity flows.
 
 | Decision | Choice |
 | --- | --- |
-| Component shape | Standalone extension in the `otap-df-contrib-extensions` crate; the `oauth2`/HTTP client dependency is isolated behind a feature flag. |
+| Component shape | Standalone extension in the `otel-arrow-dfe-contrib-extensions` crate; the `oauth2`/HTTP client dependency is isolated behind a feature flag. |
 | Capability surface | Implements the existing `BearerTokenProvider` (`get_token()` cached fast path / single coalesced slow path, `token_stream()` refresh subscription). No new capability. |
 | Execution model | `Active + Shared`. Shared serves both `require_shared()` and `require_local()` consumers via the macro's local fallback; Active drives the background refresh loop. |
 | Startup gating | Opt into the engine readiness probe; `signal_ready()` after the first token publish so the engine holds data-path node startup until a token exists (bounded by the probe timeout). |

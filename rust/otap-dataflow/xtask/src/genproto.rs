@@ -6,7 +6,7 @@ use std::path::Path;
 // Note This is derived from the otel-arrow-rust build script included
 // features to disable the client and/or server sides of the OTAP
 // protocol.  TODO: We have not retained these features, but it will
-// make sense to for portions of the otap-df-pdata crate:
+// make sense to for portions of the otel-arrow-dfe-pdata crate:
 //
 //        .server_mod_attribute(".", r#"#[cfg(feature = "server")]"#)
 //        .client_mod_attribute(".", r#"#[cfg(feature = "client")]"#)

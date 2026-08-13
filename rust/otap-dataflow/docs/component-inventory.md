@@ -2,7 +2,7 @@
 
 The otap-dataflow engine tracks all security-relevant components using
 link-time metadata registered via the `#[component_inventory]` attribute
-macro (defined in otap-df-engine-macros).
+macro (defined in otel-arrow-dfe-engine-macros).
 
 This metadata is read by offline tooling (cargo xtask component-inventory)
 and checked against a baseline to detect component additions, removals, or
@@ -115,8 +115,8 @@ free-form and each component supplies its own value.
 
 The `protocol` and `auth` attributes carry security-relevant properties, so
 their values are drawn from a controlled vocabulary defined once in the
-`otap-df-component-inventory-syntax` crate (`Protocol` and `Auth` enums). This
-keeps values consistent across components and catches typos.
+`otel-arrow-dfe-component-inventory-syntax` crate (`Protocol` and `Auth`
+enums). This keeps values consistent across components and catches typos.
 
 Matching is case-insensitive and ignores a trailing parenthetical qualifier, so
 `"gRPC (HTTP/2)"` matches `grpc` and `"mTLS (opt-in)"` matches `mtls`.

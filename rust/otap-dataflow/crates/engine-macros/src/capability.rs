@@ -79,7 +79,7 @@
 //! # Generated code paths
 //!
 //! The macro generates `crate::capability::*` paths, so it must be invoked
-//! from within the `otap-df-engine` crate. Each capability should be defined
+//! from within the `otel-arrow-dfe-engine` crate. Each capability should be defined
 //! in its own file under `capability/` to avoid `mod local`/`mod shared`
 //! name collisions.
 

@@ -14,7 +14,7 @@ use prost::Message;
 
 /// Generate a batch of synthetic log records with varying attributes and
 /// severity levels.  This is a self-contained replacement for the fixture that
-/// previously lived in `otap-df-pdata` so that the benchmark does not introduce
+/// previously lived in `otel-arrow-dfe-pdata` so that the benchmark does not introduce
 /// a cross-workspace dependency.
 fn generate_logs_batch(batch_size: usize) -> Vec<u8> {
     let severity_levels: [(i32, &str); 4] = [

@@ -61,7 +61,7 @@ changes. See [`RELEASING.md`](../../RELEASING.md) for the versioning policy.
 
 - `pipeline`: Add partition processor ([#3273](https://github.com/open-telemetry/otel-arrow/issues/3273))
 - `pipeline`: Add the `azure_identity_auth` extension, a `BearerTokenProvider` backed by Azure identity flows. ([#3356](https://github.com/open-telemetry/otel-arrow/issues/3356))
-  New `otap-df-contrib-extensions` crate (feature `azure-identity-auth-extension`,
+  New `otel-arrow-dfe-contrib-extensions` crate (feature `azure-identity-auth-extension`,
   URN `urn:microsoft:extension:azure_identity_auth`) that acquires and refreshes
   Azure access tokens and exposes them to data-path nodes via the shared
   `BearerTokenProvider` capability. Supports Managed Identity, developer tooling
@@ -96,7 +96,7 @@ changes. See [`RELEASING.md`](../../RELEASING.md) for the versioning policy.
   page shell use the full viewport width and persists the choice per browser
   via localStorage.
 
-- `engine`: `otap-df-ctl` now lets library embedders override the CLI identity used in output. A new `Branding` type (binary name + output-envelope `schemaVersion`) and a `run_with_terminal_and_diagnostics_branded` entrypoint allow a downstream binary that embeds the library to emit help, shell completions, and machine-readable JSON envelopes under its own identity instead of `dfctl`. The standalone `dfctl` binary and the existing public entrypoints are unchanged; they use the default `dfctl` / `dfctl/v1` branding. ([#3370](https://github.com/open-telemetry/otel-arrow/issues/3370))
+- `engine`: `otel-arrow-dfe-ctl` now lets library embedders override the CLI identity used in output. A new `Branding` type (binary name + output-envelope `schemaVersion`) and a `run_with_terminal_and_diagnostics_branded` entrypoint allow a downstream binary that embeds the library to emit help, shell completions, and machine-readable JSON envelopes under its own identity instead of `dfctl`. The standalone `dfctl` binary and the existing public entrypoints are unchanged; they use the default `dfctl` / `dfctl/v1` branding. ([#3370](https://github.com/open-telemetry/otel-arrow/issues/3370))
   Initial scope covers the binary name and envelope `schemaVersion`. Schema catalog identifiers, schema `$id` URLs, `DFCTL_*` environment-variable prefixes, and the interactive TUI command hints remain `dfctl`-branded and may be addressed in follow-ups.
 - `engine`: Add the `BearerTokenProvider` capability (with `BearerToken` and `CapabilityError`) so extensions can hand OAuth bearer tokens to data-path nodes. ([#3356](https://github.com/open-telemetry/otel-arrow/issues/3356))
   Defines the engine-side capability surface: the `#[capability]`-generated
@@ -276,7 +276,7 @@ changes. See [`RELEASING.md`](../../RELEASING.md) for the versioning policy.
   driven by a dedicated ExtensionMetricsMonitor that owns its own collection
   interval and shutdown fan-out per scope.
 
-  Breaking changes to the public API of `otap-df-engine`:
+  Breaking changes to the public API of `otel-arrow-dfe-engine`:
   - `ExtensionFactory::create` no longer receives `PipelineContext`. Its
     signature is now `(ExtensionId, Arc<ExtensionUserConfig>, &ExtensionConfig)
     -> Result<ExtensionBundle, Error>`. Out-of-tree extensions need to be
@@ -380,7 +380,7 @@ changes. See [`RELEASING.md`](../../RELEASING.md) for the versioning policy.
   rustls is pinned with default-features off, so rustls::crypto::ring only exists
   when the ring feature is enabled (via a crypto-* feature or test-utils). The
   unconditional fallback referenced that module even when it was configured out,
-  breaking lib-only checks of crates that depend on otap-df-otap without selecting
+  breaking lib-only checks of crates that depend on otel-arrow-dfe-otap without selecting
   a crypto provider.
 
 - `pdata`: Handle Duration and Timestamp cardinality estimation across all Arrow time units in concatenate (previously panicked). ([#3181](https://github.com/open-telemetry/otel-arrow/issues/3181))

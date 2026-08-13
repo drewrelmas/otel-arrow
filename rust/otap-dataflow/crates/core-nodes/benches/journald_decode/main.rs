@@ -27,7 +27,7 @@
 //! The `clone` arm was a validation-only comparison for this PR and is not part
 //! of the long-term benchmark, which times the current decode as it ships.
 //!
-//! Run: `cargo bench -p otap-df-core-nodes --features bench`
+//! Run: `cargo bench -p otel-arrow-dfe-core-nodes --features bench`
 
 #![allow(missing_docs)]
 

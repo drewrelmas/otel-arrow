@@ -97,7 +97,7 @@ path free of authentication plumbing.
 
 | Decision | Choice |
 | --- | --- |
-| Component shape | Standalone extension in a new `otap-df-contrib-extensions` crate; the Azure SDK dependency is isolated behind a feature flag. |
+| Component shape | Standalone extension in a new `otel-arrow-dfe-contrib-extensions` crate; the Azure SDK dependency is isolated behind a feature flag. |
 | Capability surface | `BearerTokenProvider`: `get_token()` (cached fast path / single coalesced slow path) + `token_stream()` (refresh subscription). A single purpose-built capability trait, not a general framework. |
 | Execution model | `Active + Shared`. Shared serves both `require_shared()` and `require_local()` consumers; Active drives the background refresh loop. |
 | Startup gating | Opt into the engine readiness probe; `signal_ready()` after the first token publish so the engine holds data-path node startup until a token exists (bounded by the probe timeout). |
@@ -506,7 +506,7 @@ requires a process-wide `rustls` crypto provider. `Auth::new()` calls
 credential, and the deployed binary **must** enable exactly one `crypto-*`
 feature (`crypto-ring`, `crypto-aws-lc`, `crypto-openssl`, or `crypto-symcrypt`);
 otherwise all token requests panic at runtime with "No provider set". Tests
-enable a `crypto-*` feature via `otap-df-otap`.
+enable a `crypto-*` feature via `otel-arrow-dfe-otap`.
 
 ### Factory registration
 

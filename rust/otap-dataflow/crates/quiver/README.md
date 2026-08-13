@@ -21,8 +21,8 @@ Not yet suitable for production use.
 
 ```bash
 cd rust/otap-dataflow
-cargo test -p otap-df-quiver      # unit tests + doc tests
-cargo bench -p otap-df-quiver     # Criterion benchmarks
+cargo test -p otel-arrow-dfe-quiver      # unit tests + doc tests
+cargo bench -p otel-arrow-dfe-quiver     # Criterion benchmarks
 ```
 
 ## Usage

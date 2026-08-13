@@ -1,5 +1,5 @@
 [package]
-name = "otap-df-quiver"
+name = "otel-arrow-dfe-quiver"
 description = "Embeddable Arrow-based segment store"
 version.workspace = true
 edition.workspace = true

@@ -12,7 +12,7 @@
 //! Run with:
 //!
 //! ```text
-//! cargo bench -p otap-df-telemetry --bench distribution_record
+//! cargo bench -p otel-arrow-dfe-telemetry --bench distribution_record
 //! ```
 
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};

@@ -1,5 +1,5 @@
 [package]
-name = "otap-df-validation"
+name = "otel-arrow-dfe-validation"
 description = "Performs validation for encoding/decoding and pipelines with OTLP/OTAP requests"
 version.workspace = true
 authors.workspace = true

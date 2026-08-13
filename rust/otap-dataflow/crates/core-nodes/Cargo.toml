@@ -1,5 +1,5 @@
 [package]
-name = "otap-df-core-nodes"
+name = "otel-arrow-dfe-core-nodes"
 description = "OTAP Core nodes"
 version.workspace = true
 authors.workspace = true
@@ -21,7 +21,7 @@ otap-df-otap = { workspace = true }
 otap-df-pdata = { workspace = true }
 otap-df-pdata-views = { workspace = true }
 otap-df-query-engine = { workspace = true }
-otap-df-quiver = { workspace = true }
+quiver = { workspace = true }
 otap-df-telemetry = { workspace = true }
 otap-df-telemetry-macros = { workspace = true }
 

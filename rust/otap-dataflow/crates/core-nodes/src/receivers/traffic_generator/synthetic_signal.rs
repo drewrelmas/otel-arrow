@@ -1217,7 +1217,7 @@ mod tests {
     ///
     /// Run with:
     /// ```sh
-    /// cargo test -p otap-df-core-nodes --features dev-tools -- test_metrics_compression_ratio --nocapture
+    /// cargo test -p otel-arrow-dfe-core-nodes --features dev-tools -- test_metrics_compression_ratio --nocapture
     /// ```
     #[test]
     fn test_metrics_compression_ratio_is_realistic() {

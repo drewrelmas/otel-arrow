@@ -706,11 +706,11 @@ pub fn derive_attribute_set_handler(input: TokenStream) -> TokenStream {
 }
 
 /// Returns the path prefix used to reference the telemetry crate from generated
-/// code: `crate` when expanding inside `otap-df-telemetry` itself, and
+/// code: `crate` when expanding inside `otel-arrow-dfe-telemetry` itself, and
 /// `::otap_df_telemetry` for every downstream crate.
 fn telemetry_crate_root() -> proc_macro2::TokenStream {
     let crate_name = std::env::var("CARGO_PKG_NAME").unwrap_or_default();
-    if crate_name == "otap-df-telemetry" {
+    if crate_name == "otel-arrow-dfe-telemetry" {
         quote!(crate)
     } else {
         quote!(::otap_df_telemetry)
