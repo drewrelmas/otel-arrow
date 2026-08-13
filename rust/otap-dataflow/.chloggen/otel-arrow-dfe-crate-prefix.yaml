@@ -1,0 +1,6 @@
+change_type: breaking
+component: all
+note: "Rename OTAP Dataflow Engine Cargo packages from `otap-df-*` to `otel-arrow-dfe-*`."
+issues: [1848]
+subtext: |
+  Migration: Update Git or path dependency `package` names and `cargo -p` selectors to `otel-arrow-dfe-*`. Existing `otap_df_*` Rust imports can remain when dependencies use aliases.
