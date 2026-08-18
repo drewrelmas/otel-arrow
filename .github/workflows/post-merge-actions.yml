@@ -20,6 +20,7 @@ concurrency:
 # of the repository's shared 10 GB Actions cache budget.
 jobs:
   warm-linux:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -49,6 +50,7 @@ jobs:
         working-directory: ./rust/otap-dataflow
 
   warm-windows:
+    if: github.ref == 'refs/heads/main'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -79,3 +81,91 @@ jobs:
       - name: Warm required build cache
         run: cargo nextest archive --locked --no-default-features --features=crypto-symcrypt,mimalloc,azure,aws,azure-monitor-exporter,geneva-exporter,contrib-processors,unsafe-optimizations --workspace --archive-file nextest-archive.tar.zst
         working-directory: ./rust/otap-dataflow
+
+  # Temporary experiment: dispatch this branch once for a cold build, then
+  # dispatch it again to measure the same build with a warm sccache namespace.
+  experiment-windows-sccache:
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/drewrelmas/windows-sccache-experiment'
+    runs-on: windows-latest
+    env:
+      RUSTC_WRAPPER: sccache
+      SCCACHE_GHA_ENABLED: "on"
+      SCCACHE_GHA_RW_MODE: READ_WRITE
+      SCCACHE_GHA_VERSION: windows-required-experiment-v1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: true
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with:
+          toolchain: stable
+      - name: Install SymCrypt
+        uses: ./.github/actions/install-symcrypt
+      # Keep Cargo downloads available without duplicating compiled target
+      # artifacts that sccache is responsible for during this experiment.
+      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          shared-key: windows-sccache-experiment-dependencies
+          workspaces: ./rust/otap-dataflow
+          cache-targets: false
+          cache-bin: false
+          save-if: false
+      - name: Set up sccache
+        uses: Mozilla-Actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba # v0.0.11
+        with:
+          version: v0.17.0
+      - name: Free disk space
+        shell: pwsh
+        run: |
+          if (Test-Path "C:\Android") { Remove-Item -Recurse -Force "C:\Android" }
+          if (Test-Path "C:\SeleniumWebDrivers") { Remove-Item -Recurse -Force "C:\SeleniumWebDrivers" }
+          if (Test-Path "C:\imagemagick") { Remove-Item -Recurse -Force "C:\imagemagick" }
+      - name: install nextest
+        uses: taiki-e/install-action@67729d5c413db75907f0ad1e39bb04b9c868ff60 # v2.85.7
+        with:
+          tool: cargo-nextest
+      - name: Reset sccache statistics
+        shell: pwsh
+        run: sccache --zero-stats
+      - name: Build and archive required Windows tests
+        id: build
+        shell: pwsh
+        working-directory: ./rust/otap-dataflow
+        run: |
+          $timer = [System.Diagnostics.Stopwatch]::StartNew()
+          cargo nextest archive `
+            --locked `
+            --no-default-features `
+            --features=crypto-symcrypt,mimalloc,azure,aws,azure-monitor-exporter,geneva-exporter,contrib-processors,unsafe-optimizations `
+            --workspace `
+            --archive-file nextest-archive.tar.zst
+          $exitCode = $LASTEXITCODE
+          $timer.Stop()
+          "duration_seconds=$([math]::Round($timer.Elapsed.TotalSeconds, 1))" >> $env:GITHUB_OUTPUT
+          exit $exitCode
+      - name: Report sccache experiment
+        if: always()
+        shell: pwsh
+        env:
+          BUILD_DURATION_SECONDS: ${{ steps.build.outputs.duration_seconds }}
+        run: |
+          $stats = sccache --show-stats 2>&1
+          $stats | Tee-Object -FilePath sccache-stats.txt
+
+          "## Windows required-build sccache experiment" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "- Build duration: ${env:BUILD_DURATION_SECONDS}s" >> $env:GITHUB_STEP_SUMMARY
+          "- Cache namespace: ``${env:SCCACHE_GHA_VERSION}``" >> $env:GITHUB_STEP_SUMMARY
+          "" >> $env:GITHUB_STEP_SUMMARY
+          "``````text" >> $env:GITHUB_STEP_SUMMARY
+          $stats >> $env:GITHUB_STEP_SUMMARY
+          "``````" >> $env:GITHUB_STEP_SUMMARY
+      - name: Upload sccache experiment statistics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-required-sccache-statistics
+          path: sccache-stats.txt
+          if-no-files-found: warn
