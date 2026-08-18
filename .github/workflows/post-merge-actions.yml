@@ -118,7 +118,7 @@ jobs:
           workspaces: ./rust/otap-dataflow
           cache-targets: false
           cache-bin: false
-          save-if: false
+          save-if: ${{ github.ref == 'refs/heads/drewrelmas/windows-sccache-experiment' }}
       - name: Set up sccache
         uses: Mozilla-Actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba # v0.0.11
         with:
