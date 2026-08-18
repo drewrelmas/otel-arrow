@@ -20,7 +20,10 @@ concurrency:
 # of the repository's shared 10 GB Actions cache budget.
 jobs:
   warm-linux:
-    if: github.ref == 'refs/heads/main'
+    # Forks inherit this workflow, so guard the expensive warmers to upstream.
+    if: >-
+      github.repository == 'open-telemetry/otel-arrow' &&
+      github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -50,7 +53,10 @@ jobs:
         working-directory: ./rust/otap-dataflow
 
   warm-windows:
-    if: github.ref == 'refs/heads/main'
+    # Forks inherit this workflow, so guard the expensive warmers to upstream.
+    if: >-
+      github.repository == 'open-telemetry/otel-arrow' &&
+      github.ref == 'refs/heads/main'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -86,6 +92,7 @@ jobs:
   # dispatch it again to measure the same build with a warm sccache namespace.
   experiment-windows-sccache:
     if: >-
+      github.repository == 'drewrelmas/otel-arrow' &&
       github.event_name == 'workflow_dispatch' &&
       github.ref == 'refs/heads/drewrelmas/windows-sccache-experiment'
     runs-on: windows-latest
