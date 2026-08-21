@@ -9,7 +9,7 @@ use opentelemetry_proto::tonic::collector::logs::v1::ExportLogsServiceRequest;
 use opentelemetry_proto::tonic::common::v1::any_value::Value;
 use opentelemetry_proto::tonic::common::v1::{AnyValue, KeyValue};
 use opentelemetry_proto::tonic::logs::v1::{LogRecord, ResourceLogs, ScopeLogs};
-use otap_df_contrib_nodes::processors::recordset_kql_processor::otlp_bridge::*;
+use otel_arrow_dfe_contrib_nodes::processors::recordset_kql_processor::otlp_bridge::*;
 use prost::Message;
 
 /// Generate a batch of synthetic log records with varying attributes and

@@ -19,9 +19,9 @@ use std::time::{Duration, Instant};
 
 use futures::StreamExt;
 use http::HeaderValue;
-use otap_df_engine::capability::auth::bearer_token_provider::TokenStream;
-use otap_df_engine::local::capability::auth::bearer_token_provider::BearerTokenProvider;
-use otap_df_telemetry::otel_warn;
+use otel_arrow_dfe_engine::capability::auth::bearer_token_provider::TokenStream;
+use otel_arrow_dfe_engine::local::capability::auth::bearer_token_provider::BearerTokenProvider;
+use otel_arrow_dfe_telemetry::otel_warn;
 
 /// Safety margin before a cached token's expiry within which it is treated as
 /// unusable, so the exporter back-pressures (awaiting a fresh token) rather than

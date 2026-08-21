@@ -32,12 +32,12 @@ use crate::node_local_scheduler::NodeLocalSchedulerHandle;
 use crate::shared::message::{SharedReceiver, SharedSender};
 use crate::shared::processor as shared;
 use crate::terminal_state::TerminalMetricsDeadline;
-use otap_df_channel::error::SendError;
-use otap_df_channel::mpsc;
-use otap_df_config::node::NodeUserConfig;
-use otap_df_config::{PortName, SignalType};
-use otap_df_telemetry::metrics::MeasurementMetricSet;
-use otap_df_telemetry::reporter::MetricsReporter;
+use otel_arrow_dfe_channel::error::SendError;
+use otel_arrow_dfe_channel::mpsc;
+use otel_arrow_dfe_config::node::NodeUserConfig;
+use otel_arrow_dfe_config::{PortName, SignalType};
+use otel_arrow_dfe_telemetry::metrics::MeasurementMetricSet;
+use otel_arrow_dfe_telemetry::reporter::MetricsReporter;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -679,7 +679,7 @@ impl<PData> ProcessorWrapper<PData> {
                         .report_flow_metrics_reliably(terminal_metrics_deadline)
                         .await
                     {
-                        otap_df_telemetry::otel_warn!(
+                        otel_arrow_dfe_telemetry::otel_warn!(
                             "processor.flow_metrics.final_reporting.fail",
                             error = error.to_string()
                         );
@@ -700,7 +700,7 @@ impl<PData> ProcessorWrapper<PData> {
                         .report_snapshot_reliably_until(snapshot, terminal_metrics_deadline)
                         .await
                     {
-                        otap_df_telemetry::otel_warn!(
+                        otel_arrow_dfe_telemetry::otel_warn!(
                             "processor.metrics.final_reporting.fail",
                             error = error.to_string()
                         );
@@ -774,7 +774,7 @@ impl<PData> ProcessorWrapper<PData> {
                         .report_flow_metrics_reliably(terminal_metrics_deadline)
                         .await
                     {
-                        otap_df_telemetry::otel_warn!(
+                        otel_arrow_dfe_telemetry::otel_warn!(
                             "processor.flow_metrics.final_reporting.fail",
                             error = error.to_string()
                         );
@@ -795,7 +795,7 @@ impl<PData> ProcessorWrapper<PData> {
                         .report_snapshot_reliably_until(snapshot, terminal_metrics_deadline)
                         .await
                     {
-                        otap_df_telemetry::otel_warn!(
+                        otel_arrow_dfe_telemetry::otel_warn!(
                             "processor.metrics.final_reporting.fail",
                             error = error.to_string()
                         );
@@ -984,9 +984,9 @@ mod tests {
     use crate::testing::processor::{TestContext, ValidateContext};
     use crate::testing::{CtrlMsgCounters, TestMsg, test_node};
     use async_trait::async_trait;
-    use otap_df_config::{SignalType, node::NodeUserConfig};
-    use otap_df_telemetry::common_attributes::SignalAttributes;
-    use otap_df_telemetry::metrics::{MeasurementMetricSet, MetricValue};
+    use otel_arrow_dfe_config::{SignalType, node::NodeUserConfig};
+    use otel_arrow_dfe_telemetry::common_attributes::SignalAttributes;
+    use otel_arrow_dfe_telemetry::metrics::{MeasurementMetricSet, MetricValue};
     use serde_json::Value;
     use std::ops::Add;
     use std::pin::Pin;
@@ -1286,7 +1286,7 @@ mod tests {
             &pipeline_ctx.metric_set_registrar_for_entity(entity_key),
         );
         let (metrics_rx, metrics_reporter) =
-            otap_df_telemetry::reporter::MetricsReporter::create_new_and_receiver(4);
+            otel_arrow_dfe_telemetry::reporter::MetricsReporter::create_new_and_receiver(4);
         let mut handler = local::EffectHandler::<TestMsg>::new(
             test_node("proc"),
             std::collections::HashMap::new(),
@@ -1331,7 +1331,7 @@ mod tests {
         let duration_metric = FlowDurationMetrics::register(&registrar);
         let produced_items_metric = FlowProducedItemsMetrics::register(&registrar);
         let (metrics_rx, metrics_reporter) =
-            otap_df_telemetry::reporter::MetricsReporter::create_new_and_receiver(4);
+            otel_arrow_dfe_telemetry::reporter::MetricsReporter::create_new_and_receiver(4);
         let mut handler = local::EffectHandler::<TestMsg>::new(
             test_node("proc"),
             std::collections::HashMap::new(),
@@ -1358,9 +1358,9 @@ mod tests {
             .try_recv()
             .expect("duration metric should report");
         let [
-            MetricValue::Distribution(otap_df_telemetry::instrument::DistributionValue::Basic(
-                duration,
-            )),
+            MetricValue::Distribution(
+                otel_arrow_dfe_telemetry::instrument::DistributionValue::Basic(duration),
+            ),
         ] = duration_snapshot.get_metrics()
         else {
             panic!("expected duration metric");
@@ -1386,7 +1386,7 @@ mod tests {
             &pipeline_ctx.metric_set_registrar_for_entity(entity_key),
         );
         let (metrics_rx, metrics_reporter) =
-            otap_df_telemetry::reporter::MetricsReporter::create_new_and_receiver(4);
+            otel_arrow_dfe_telemetry::reporter::MetricsReporter::create_new_and_receiver(4);
         let mut handler = local::EffectHandler::<TestMsg>::new(
             test_node("proc"),
             std::collections::HashMap::new(),
@@ -1450,7 +1450,7 @@ mod tests {
             &config,
         );
 
-        let (input_tx, input_rx) = otap_df_channel::mpsc::Channel::new(1);
+        let (input_tx, input_rx) = otel_arrow_dfe_channel::mpsc::Channel::new(1);
         processor
             .set_pdata_receiver(
                 node_id.clone(),
@@ -1458,7 +1458,7 @@ mod tests {
             )
             .expect("input receiver should be accepted");
 
-        let (output_tx, output_rx) = otap_df_channel::mpsc::Channel::new(1);
+        let (output_tx, output_rx) = otel_arrow_dfe_channel::mpsc::Channel::new(1);
         processor
             .set_pdata_sender(
                 node_id,
@@ -1469,7 +1469,7 @@ mod tests {
 
         let control_sender = processor.control_sender();
         let (metrics_rx, metrics_reporter) =
-            otap_df_telemetry::reporter::MetricsReporter::create_new_and_receiver(8);
+            otel_arrow_dfe_telemetry::reporter::MetricsReporter::create_new_and_receiver(8);
         let collect_metrics_reporter = metrics_reporter.clone();
         let (runtime_ctrl_tx, _runtime_ctrl_rx) = runtime_ctrl_msg_channel(1);
         let (completion_tx, _completion_rx) = pipeline_completion_msg_channel(1);
@@ -1532,7 +1532,9 @@ mod tests {
                         .expect("metrics channel should remain open");
                 let [
                     MetricValue::Distribution(
-                        otap_df_telemetry::instrument::DistributionValue::Basic(compute_duration),
+                        otel_arrow_dfe_telemetry::instrument::DistributionValue::Basic(
+                            compute_duration,
+                        ),
                     ),
                 ] = snapshot.get_metrics()
                 else {
@@ -1650,7 +1652,7 @@ mod tests {
         consumed_metric: MeasurementMetricSet<FlowConsumedItemsMetrics>,
     ) -> (
         Error,
-        flume::Receiver<otap_df_telemetry::metrics::MetricSetSnapshot>,
+        flume::Receiver<otel_arrow_dfe_telemetry::metrics::MetricSetSnapshot>,
     ) {
         let config = ProcessorConfig::new("test_processor");
         let node_id = test_node(config.name.clone());
@@ -1658,8 +1660,8 @@ mod tests {
         let is_shared = p.is_shared();
 
         if !is_shared {
-            let (tx, rx) = otap_df_channel::mpsc::Channel::new(4);
-            let (out_tx, _out_rx) = otap_df_channel::mpsc::Channel::new(4);
+            let (tx, rx) = otel_arrow_dfe_channel::mpsc::Channel::new(4);
+            let (out_tx, _out_rx) = otel_arrow_dfe_channel::mpsc::Channel::new(4);
             p.set_pdata_receiver(node_id.clone(), Receiver::Local(LocalReceiver::mpsc(rx)))
                 .expect("set pdata receiver");
             p.set_pdata_sender(
@@ -1689,7 +1691,7 @@ mod tests {
         }
 
         let (metrics_rx, metrics_reporter) =
-            otap_df_telemetry::reporter::MetricsReporter::create_new_and_receiver(16);
+            otel_arrow_dfe_telemetry::reporter::MetricsReporter::create_new_and_receiver(16);
         let (runtime_ctrl_tx, _runtime_ctrl_rx) = runtime_ctrl_msg_channel(4);
         let (completion_tx, _completion_rx) = pipeline_completion_msg_channel(4);
 
@@ -1907,8 +1909,8 @@ mod tests {
         let config = ProcessorConfig::new("test_processor");
         let node_id = test_node(config.name.clone());
         let user_config = Arc::new(NodeUserConfig::new_processor_config("test_processor"));
-        let (input_tx, input_rx) = otap_df_channel::mpsc::Channel::new(4);
-        let (out_tx, _out_rx) = otap_df_channel::mpsc::Channel::new(4);
+        let (input_tx, input_rx) = otel_arrow_dfe_channel::mpsc::Channel::new(4);
+        let (out_tx, _out_rx) = otel_arrow_dfe_channel::mpsc::Channel::new(4);
         let mut p = ProcessorWrapper::local(
             ErrorOnPDataAndCollectProcessor,
             node_id.clone(),
@@ -1928,7 +1930,7 @@ mod tests {
         .expect("set pdata sender");
 
         let (metrics_rx, metrics_reporter) =
-            otap_df_telemetry::reporter::MetricsReporter::create_new_and_receiver(4);
+            otel_arrow_dfe_telemetry::reporter::MetricsReporter::create_new_and_receiver(4);
         let (runtime_ctrl_tx, _runtime_ctrl_rx) = runtime_ctrl_msg_channel(4);
         let (completion_tx, _completion_rx) = pipeline_completion_msg_channel(4);
 

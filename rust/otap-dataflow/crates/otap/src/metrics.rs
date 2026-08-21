@@ -6,9 +6,9 @@
 //! Note: We try as much as possible to follow the following
 //! [RFC Pipeline Component Telemetry](https://github.com/open-telemetry/opentelemetry-collector/blob/main/docs/rfcs/component-universal-telemetry.md).
 
-use otap_df_telemetry::common_attributes::SignalOutcomeAttributes;
-use otap_df_telemetry::instrument::Counter;
-use otap_df_telemetry_macros::metric_set;
+use otel_arrow_dfe_telemetry::common_attributes::SignalOutcomeAttributes;
+use otel_arrow_dfe_telemetry::instrument::Counter;
+use otel_arrow_dfe_telemetry_macros::metric_set;
 
 /// Completed PData export operations.
 #[metric_set(
@@ -25,11 +25,11 @@ pub struct ExporterPDataExportMetrics {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use otap_df_config::SignalType;
-    use otap_df_engine::context::ControllerContext;
-    use otap_df_telemetry::common_attributes::Outcome;
-    use otap_df_telemetry::metrics::MeasurementMetricSet;
-    use otap_df_telemetry::registry::TelemetryRegistryHandle;
+    use otel_arrow_dfe_config::SignalType;
+    use otel_arrow_dfe_engine::context::ControllerContext;
+    use otel_arrow_dfe_telemetry::common_attributes::Outcome;
+    use otel_arrow_dfe_telemetry::metrics::MeasurementMetricSet;
+    use otel_arrow_dfe_telemetry::registry::TelemetryRegistryHandle;
 
     fn new_test_metrics() -> MeasurementMetricSet<ExporterPDataExportMetrics> {
         let registry = TelemetryRegistryHandle::new();

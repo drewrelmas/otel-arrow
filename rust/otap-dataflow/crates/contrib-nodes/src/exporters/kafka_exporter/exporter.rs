@@ -20,24 +20,24 @@ use crate::common::kafka::security::build_aws_msk_context;
 use crate::common::kafka::{MSG_FORMAT_OTAP, MSG_FORMAT_OTLP, MessageFormat};
 use async_trait::async_trait;
 use linkme::distributed_slice;
-use otap_df_config::SignalType;
-use otap_df_config::error::Error as ConfigError;
-use otap_df_config::node::NodeUserConfig;
-use otap_df_config::validation::validate_typed_config;
-use otap_df_engine::ConsumerEffectHandlerExtension;
-use otap_df_engine::ExporterFactory;
-use otap_df_engine::config::ExporterConfig;
-use otap_df_engine::context::PipelineContext;
-use otap_df_engine::control::{AckMsg, NackMsg, NodeControlMsg};
-use otap_df_engine::error::Error as EngineError;
-use otap_df_engine::exporter::ExporterWrapper;
-use otap_df_engine::local::exporter::{EffectHandler, Exporter};
-use otap_df_engine::message::{ExporterInbox, Message};
-use otap_df_engine::node::NodeId;
-use otap_df_engine::terminal_state::TerminalState;
-use otap_df_otap::OTAP_EXPORTER_FACTORIES;
-use otap_df_otap::pdata::OtapPdata;
-use otap_df_pdata::Producer as PdataProducer;
+use otel_arrow_dfe_config::SignalType;
+use otel_arrow_dfe_config::error::Error as ConfigError;
+use otel_arrow_dfe_config::node::NodeUserConfig;
+use otel_arrow_dfe_config::validation::validate_typed_config;
+use otel_arrow_dfe_engine::ConsumerEffectHandlerExtension;
+use otel_arrow_dfe_engine::ExporterFactory;
+use otel_arrow_dfe_engine::config::ExporterConfig;
+use otel_arrow_dfe_engine::context::PipelineContext;
+use otel_arrow_dfe_engine::control::{AckMsg, NackMsg, NodeControlMsg};
+use otel_arrow_dfe_engine::error::Error as EngineError;
+use otel_arrow_dfe_engine::exporter::ExporterWrapper;
+use otel_arrow_dfe_engine::local::exporter::{EffectHandler, Exporter};
+use otel_arrow_dfe_engine::message::{ExporterInbox, Message};
+use otel_arrow_dfe_engine::node::NodeId;
+use otel_arrow_dfe_engine::terminal_state::TerminalState;
+use otel_arrow_dfe_otap::OTAP_EXPORTER_FACTORIES;
+use otel_arrow_dfe_otap::pdata::OtapPdata;
+use otel_arrow_dfe_pdata::Producer as PdataProducer;
 use rdkafka::client::DefaultClientContext;
 use rdkafka::config::FromClientConfigAndContext;
 use rdkafka::message::{Header, OwnedHeaders};
@@ -159,24 +159,25 @@ pub struct KafkaExporter {
 
 /// Factory registration for the Kafka exporter.
 #[allow(unsafe_code)]
-#[otap_df_engine::component_inventory(category = Exporter)]
+#[otel_arrow_dfe_engine::component_inventory(category = Exporter)]
 #[distributed_slice(OTAP_EXPORTER_FACTORIES)]
 pub static KAFKA_EXPORTER_FACTORY: ExporterFactory<OtapPdata> = ExporterFactory {
     name: KAFKA_EXPORTER_URN,
-    create: |pipeline_ctx: PipelineContext,
-             node: NodeId,
-             node_config: Arc<NodeUserConfig>,
-             exporter_config: &ExporterConfig,
-             _capabilities: &otap_df_engine::capability::registry::Capabilities| {
-        Ok(ExporterWrapper::local(
-            KafkaExporter::from_config(pipeline_ctx, &node_config.config)?,
-            node,
-            node_config,
-            exporter_config,
-        ))
-    },
+    create:
+        |pipeline_ctx: PipelineContext,
+         node: NodeId,
+         node_config: Arc<NodeUserConfig>,
+         exporter_config: &ExporterConfig,
+         _capabilities: &otel_arrow_dfe_engine::capability::registry::Capabilities| {
+            Ok(ExporterWrapper::local(
+                KafkaExporter::from_config(pipeline_ctx, &node_config.config)?,
+                node,
+                node_config,
+                exporter_config,
+            ))
+        },
     validate_config: validate_typed_config::<KafkaExporterConfig>,
-    wiring_contract: otap_df_engine::wiring_contract::WiringContract::UNRESTRICTED,
+    wiring_contract: otel_arrow_dfe_engine::wiring_contract::WiringContract::UNRESTRICTED,
 };
 
 impl KafkaExporter {
@@ -195,7 +196,7 @@ impl KafkaExporter {
     ) -> Result<Self, KafkaExporterError> {
         // Warn about producer_config keys that may be overwritten by first-class fields.
         for key in config.overridden_producer_config_keys() {
-            otap_df_telemetry::otel_warn!(
+            otel_arrow_dfe_telemetry::otel_warn!(
                 "kafka.exporter.producer_config.overridden_key",
                 key = %key,
                 "producer_config contains key '{key}' which is also managed by a \
@@ -277,7 +278,7 @@ impl KafkaExporter {
     fn build_kafka_headers(
         encoding: MessageFormat,
         format_header_key: &str,
-        context: &otap_df_otap::pdata::Context,
+        context: &otel_arrow_dfe_otap::pdata::Context,
         effect_handler: Option<&EffectHandler<OtapPdata>>,
     ) -> OwnedHeaders {
         let mut headers = OwnedHeaders::new();
@@ -346,7 +347,7 @@ impl KafkaExporter {
         let signal_config = match Self::get_signal_config(&self.config, signal_type) {
             Ok(cfg) => cfg,
             Err(e) => {
-                otap_df_telemetry::otel_warn!(
+                otel_arrow_dfe_telemetry::otel_warn!(
                     "kafka.exporter.signal.unconfigured",
                     signal_type = ?signal_type,
                     error = %e,
@@ -396,7 +397,7 @@ impl KafkaExporter {
         let payload_bytes = match encode_result {
             Ok(bytes) => bytes,
             Err(e) => {
-                otap_df_telemetry::otel_error!(
+                otel_arrow_dfe_telemetry::otel_error!(
                     "kafka.exporter.encode.failed",
                     signal_type = ?signal_type,
                     error = %e,
@@ -440,7 +441,7 @@ impl KafkaExporter {
             }
             Err((kafka_err, _original_record)) => {
                 self.metrics.inc_failed(signal_type);
-                otap_df_telemetry::otel_warn!(
+                otel_arrow_dfe_telemetry::otel_warn!(
                     "kafka.exporter.send.failed",
                     topic = %topic,
                     signal_type = ?signal_type,
@@ -485,7 +486,7 @@ impl KafkaExporter {
             .unwrap_or(Duration::ZERO);
 
         if let Err(e) = self.producer.flush(flush_timeout) {
-            otap_df_telemetry::otel_warn!(
+            otel_arrow_dfe_telemetry::otel_warn!(
                 "kafka.exporter.shutdown.flush_failed",
                 error = %e,
             );
@@ -576,9 +577,9 @@ pub mod test_support {
     use super::*;
     use crate::exporters::kafka_exporter::config::KafkaExporterConfigBuilder;
     use bytes::Bytes;
-    use otap_df_engine::context::ControllerContext;
-    use otap_df_otap::pdata::Context;
-    use otap_df_telemetry::registry::TelemetryRegistryHandle;
+    use otel_arrow_dfe_engine::context::ControllerContext;
+    use otel_arrow_dfe_otap::pdata::Context;
+    use otel_arrow_dfe_telemetry::registry::TelemetryRegistryHandle;
     use std::sync::{Arc, Mutex};
 
     /// Creates a deterministic pipeline context for tests.
@@ -628,11 +629,13 @@ pub mod test_support {
     pub fn sample_pdata(signal_type: SignalType) -> OtapPdata {
         let bytes = Bytes::from_static(b"payload");
         let proto = match signal_type {
-            SignalType::Traces => otap_df_pdata::OtlpProtoBytes::ExportTracesRequest(bytes.clone()),
-            SignalType::Metrics => {
-                otap_df_pdata::OtlpProtoBytes::ExportMetricsRequest(bytes.clone())
+            SignalType::Traces => {
+                otel_arrow_dfe_pdata::OtlpProtoBytes::ExportTracesRequest(bytes.clone())
             }
-            SignalType::Logs => otap_df_pdata::OtlpProtoBytes::ExportLogsRequest(bytes),
+            SignalType::Metrics => {
+                otel_arrow_dfe_pdata::OtlpProtoBytes::ExportMetricsRequest(bytes.clone())
+            }
+            SignalType::Logs => otel_arrow_dfe_pdata::OtlpProtoBytes::ExportLogsRequest(bytes),
         };
         OtapPdata::new(Context::default(), proto.into())
     }
@@ -644,15 +647,19 @@ pub mod test_support {
         header_wire_name: &str,
         header_value: &str,
     ) -> OtapPdata {
-        use otap_df_config::transport_headers::{TransportHeader, TransportHeaders, ValueKind};
+        use otel_arrow_dfe_config::transport_headers::{
+            TransportHeader, TransportHeaders, ValueKind,
+        };
 
         let bytes = Bytes::from_static(b"payload");
         let proto = match signal_type {
-            SignalType::Traces => otap_df_pdata::OtlpProtoBytes::ExportTracesRequest(bytes.clone()),
-            SignalType::Metrics => {
-                otap_df_pdata::OtlpProtoBytes::ExportMetricsRequest(bytes.clone())
+            SignalType::Traces => {
+                otel_arrow_dfe_pdata::OtlpProtoBytes::ExportTracesRequest(bytes.clone())
             }
-            SignalType::Logs => otap_df_pdata::OtlpProtoBytes::ExportLogsRequest(bytes),
+            SignalType::Metrics => {
+                otel_arrow_dfe_pdata::OtlpProtoBytes::ExportMetricsRequest(bytes.clone())
+            }
+            SignalType::Logs => otel_arrow_dfe_pdata::OtlpProtoBytes::ExportLogsRequest(bytes),
         };
 
         let mut headers = TransportHeaders::new();
@@ -779,9 +786,11 @@ pub mod test_support {
         use crate::exporters::kafka_exporter::config::TlsConfig;
         use crate::exporters::kafka_exporter::partitioner::partition_key_from_transport_headers;
         use bytes::Bytes;
-        use otap_df_config::transport_headers::{TransportHeader, TransportHeaders, ValueKind};
-        use otap_df_otap::pdata::Context;
-        use otap_df_pdata::OtlpProtoBytes;
+        use otel_arrow_dfe_config::transport_headers::{
+            TransportHeader, TransportHeaders, ValueKind,
+        };
+        use otel_arrow_dfe_otap::pdata::Context;
+        use otel_arrow_dfe_pdata::OtlpProtoBytes;
         use prost::Message as _;
         use std::time::Duration;
 
@@ -1100,8 +1109,8 @@ pub mod test_support {
         /// Builds an [`ExportLogsServiceRequest`] with a single log record so
         /// tests exercise a real OTLP payload (required for OTAP encoding).
         fn logs_request_bytes() -> Vec<u8> {
-            use otap_df_pdata::proto::opentelemetry::collector::logs::v1::ExportLogsServiceRequest;
-            use otap_df_pdata::proto::opentelemetry::logs::v1::{
+            use otel_arrow_dfe_pdata::proto::opentelemetry::collector::logs::v1::ExportLogsServiceRequest;
+            use otel_arrow_dfe_pdata::proto::opentelemetry::logs::v1::{
                 LogRecord, ResourceLogs, ScopeLogs,
             };
 
@@ -1141,8 +1150,10 @@ pub mod test_support {
         /// Builds an [`ExportTraceServiceRequest`] with a single span, returned
         /// as OTLP proto bytes wrapped in an [`OtapPdata`].
         fn traces_pdata() -> (OtapPdata, Vec<u8>) {
-            use otap_df_pdata::proto::opentelemetry::collector::trace::v1::ExportTraceServiceRequest;
-            use otap_df_pdata::proto::opentelemetry::trace::v1::{ResourceSpans, ScopeSpans, Span};
+            use otel_arrow_dfe_pdata::proto::opentelemetry::collector::trace::v1::ExportTraceServiceRequest;
+            use otel_arrow_dfe_pdata::proto::opentelemetry::trace::v1::{
+                ResourceSpans, ScopeSpans, Span,
+            };
 
             let req = ExportTraceServiceRequest {
                 resource_spans: vec![ResourceSpans {
@@ -1166,8 +1177,10 @@ pub mod test_support {
         /// Builds an [`ExportMetricsServiceRequest`] with a single scope,
         /// returned as OTLP proto bytes wrapped in an [`OtapPdata`].
         fn metrics_pdata() -> (OtapPdata, Vec<u8>) {
-            use otap_df_pdata::proto::opentelemetry::collector::metrics::v1::ExportMetricsServiceRequest;
-            use otap_df_pdata::proto::opentelemetry::metrics::v1::{ResourceMetrics, ScopeMetrics};
+            use otel_arrow_dfe_pdata::proto::opentelemetry::collector::metrics::v1::ExportMetricsServiceRequest;
+            use otel_arrow_dfe_pdata::proto::opentelemetry::metrics::v1::{
+                ResourceMetrics, ScopeMetrics,
+            };
 
             let req = ExportMetricsServiceRequest {
                 resource_metrics: vec![ResourceMetrics {
@@ -1299,7 +1312,7 @@ pub mod test_support {
         /// payload decodes as a `BatchArrowRecords` protobuf message.
         #[tokio::test]
         async fn exports_logs_otap_sets_otap_format_header() {
-            use otap_df_pdata::proto::opentelemetry::arrow::v1::BatchArrowRecords;
+            use otel_arrow_dfe_pdata::proto::opentelemetry::arrow::v1::BatchArrowRecords;
 
             let topic = "it-logs-otap";
             with_cluster(

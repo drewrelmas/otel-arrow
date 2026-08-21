@@ -10,37 +10,39 @@ use async_stream::stream;
 use async_trait::async_trait;
 use futures::stream::{FuturesUnordered, StreamExt};
 use linkme::distributed_slice;
-use otap_df_config::SignalType;
-use otap_df_config::node::NodeUserConfig;
-use otap_df_engine::ConsumerEffectHandlerExtension;
-use otap_df_engine::ExporterFactory;
-use otap_df_engine::config::ExporterConfig;
-use otap_df_engine::context::PipelineContext;
-use otap_df_engine::control::{AckMsg, NackMsg, NodeControlMsg};
-use otap_df_engine::error::{Error, ExporterErrorKind, format_error_sources};
-use otap_df_engine::exporter::ExporterWrapper;
-use otap_df_engine::local::exporter as local;
-use otap_df_engine::message::{ExporterInbox, Message};
-use otap_df_engine::node::NodeId;
-use otap_df_engine::terminal_state::TerminalState;
-use otap_df_otap::OTAP_EXPORTER_FACTORIES;
-use otap_df_otap::metrics::ExporterPDataExportMetrics;
-use otap_df_otap::pdata::OtapPdata;
-use otap_df_pdata::Producer;
-use otap_df_pdata::TryIntoWithOptions;
-use otap_df_pdata::encode::producer::ProducerOptions;
-use otap_df_pdata::otap::OtapArrowRecords;
-use otap_df_pdata::proto::opentelemetry::arrow::v1::{BatchArrowRecords, BatchStatus, StatusCode};
-use otap_df_pdata::proto::opentelemetry::arrow::v1::{
+use otel_arrow_dfe_config::SignalType;
+use otel_arrow_dfe_config::node::NodeUserConfig;
+use otel_arrow_dfe_engine::ConsumerEffectHandlerExtension;
+use otel_arrow_dfe_engine::ExporterFactory;
+use otel_arrow_dfe_engine::config::ExporterConfig;
+use otel_arrow_dfe_engine::context::PipelineContext;
+use otel_arrow_dfe_engine::control::{AckMsg, NackMsg, NodeControlMsg};
+use otel_arrow_dfe_engine::error::{Error, ExporterErrorKind, format_error_sources};
+use otel_arrow_dfe_engine::exporter::ExporterWrapper;
+use otel_arrow_dfe_engine::local::exporter as local;
+use otel_arrow_dfe_engine::message::{ExporterInbox, Message};
+use otel_arrow_dfe_engine::node::NodeId;
+use otel_arrow_dfe_engine::terminal_state::TerminalState;
+use otel_arrow_dfe_otap::OTAP_EXPORTER_FACTORIES;
+use otel_arrow_dfe_otap::metrics::ExporterPDataExportMetrics;
+use otel_arrow_dfe_otap::pdata::OtapPdata;
+use otel_arrow_dfe_pdata::Producer;
+use otel_arrow_dfe_pdata::TryIntoWithOptions;
+use otel_arrow_dfe_pdata::encode::producer::ProducerOptions;
+use otel_arrow_dfe_pdata::otap::OtapArrowRecords;
+use otel_arrow_dfe_pdata::proto::opentelemetry::arrow::v1::{
+    BatchArrowRecords, BatchStatus, StatusCode,
+};
+use otel_arrow_dfe_pdata::proto::opentelemetry::arrow::v1::{
     arrow_logs_service_client::ArrowLogsServiceClient,
     arrow_metrics_service_client::ArrowMetricsServiceClient,
     arrow_traces_service_client::ArrowTracesServiceClient,
 };
-use otap_df_telemetry::common_attributes::{Outcome, SignalOutcomeAttributes};
-use otap_df_telemetry::instrument::{Gauge, Mmsc};
-use otap_df_telemetry::metrics::{MeasurementMetricSet, MetricSet};
-use otap_df_telemetry::{otel_debug, otel_error, otel_info, otel_warn};
-use otap_df_telemetry_macros::metric_set;
+use otel_arrow_dfe_telemetry::common_attributes::{Outcome, SignalOutcomeAttributes};
+use otel_arrow_dfe_telemetry::instrument::{Gauge, Mmsc};
+use otel_arrow_dfe_telemetry::metrics::{MeasurementMetricSet, MetricSet};
+use otel_arrow_dfe_telemetry::{otel_debug, otel_error, otel_info, otel_warn};
+use otel_arrow_dfe_telemetry_macros::metric_set;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -159,23 +161,24 @@ impl ExportLatencyWindow {
 /// Unsafe code is temporarily used here to allow the use of `distributed_slice` macro
 /// This macro is part of the `linkme` crate which is considered safe and well maintained.
 #[allow(unsafe_code)]
-#[otap_df_engine::component_inventory(category = Exporter)]
+#[otel_arrow_dfe_engine::component_inventory(category = Exporter)]
 #[distributed_slice(OTAP_EXPORTER_FACTORIES)]
 pub static OTAP_EXPORTER: ExporterFactory<OtapPdata> = ExporterFactory {
     name: OTAP_EXPORTER_URN,
-    create: |pipeline: PipelineContext,
-             node: NodeId,
-             node_config: Arc<NodeUserConfig>,
-             exporter_config: &ExporterConfig,
-             _capabilities: &otap_df_engine::capability::registry::Capabilities| {
-        Ok(ExporterWrapper::local(
-            OTAPExporter::from_config(pipeline, &node_config.config)?,
-            node,
-            node_config,
-            exporter_config,
-        ))
-    },
-    wiring_contract: otap_df_engine::wiring_contract::WiringContract::UNRESTRICTED,
+    create:
+        |pipeline: PipelineContext,
+         node: NodeId,
+         node_config: Arc<NodeUserConfig>,
+         exporter_config: &ExporterConfig,
+         _capabilities: &otel_arrow_dfe_engine::capability::registry::Capabilities| {
+            Ok(ExporterWrapper::local(
+                OTAPExporter::from_config(pipeline, &node_config.config)?,
+                node,
+                node_config,
+                exporter_config,
+            ))
+        },
+    wiring_contract: otel_arrow_dfe_engine::wiring_contract::WiringContract::UNRESTRICTED,
     validate_config,
 };
 
@@ -184,15 +187,15 @@ pub static OTAP_EXPORTER: ExporterFactory<OtapPdata> = ExporterFactory {
 /// Runs before any node is started (initial load and live reconfigure), so bad
 /// configuration is rejected fast and attributed to the offending node rather
 /// than surfacing as an opaque client error at startup.
-fn validate_config(config: &Value) -> Result<(), otap_df_config::error::Error> {
+fn validate_config(config: &Value) -> Result<(), otel_arrow_dfe_config::error::Error> {
     let cfg: Config = serde_json::from_value(config.clone()).map_err(|e| {
-        otap_df_config::error::Error::InvalidUserConfig {
+        otel_arrow_dfe_config::error::Error::InvalidUserConfig {
             error: e.to_string(),
         }
     })?;
     cfg.grpc
         .validate()
-        .map_err(|e| otap_df_config::error::Error::InvalidUserConfig {
+        .map_err(|e| otel_arrow_dfe_config::error::Error::InvalidUserConfig {
             error: e.to_string(),
         })?;
     Ok(())
@@ -223,9 +226,9 @@ impl OTAPExporter {
     pub fn from_config(
         pipeline_ctx: PipelineContext,
         config: &Value,
-    ) -> Result<Self, otap_df_config::error::Error> {
+    ) -> Result<Self, otel_arrow_dfe_config::error::Error> {
         let config: Config = serde_json::from_value(config.clone()).map_err(|e| {
-            otap_df_config::error::Error::InvalidUserConfig {
+            otel_arrow_dfe_config::error::Error::InvalidUserConfig {
                 error: e.to_string(),
             }
         })?;
@@ -236,12 +239,11 @@ impl OTAPExporter {
         // path (including direct/programmatic `from_config` callers) rejects
         // invalid or gRPC-reserved headers up front, so `start()` can never
         // build stream metadata from an unvalidated config.
-        config
-            .grpc
-            .validate()
-            .map_err(|e| otap_df_config::error::Error::InvalidUserConfig {
+        config.grpc.validate().map_err(|e| {
+            otel_arrow_dfe_config::error::Error::InvalidUserConfig {
                 error: e.to_string(),
-            })?;
+            }
+        })?;
 
         Ok(OTAPExporter::new(pipeline_ctx, config))
     }
@@ -1160,48 +1162,50 @@ mod tests {
     use crate::exporters::otap_exporter::OTAP_EXPORTER_URN;
     use crate::exporters::otap_exporter::OTAPExporter;
     use crate::exporters::otap_exporter::config::ArrowPayloadCompression;
-    use otap_df_otap::otap_mock::{
+    use otel_arrow_dfe_otap::otap_mock::{
         ArrowLogsServiceMock, ArrowMetricsServiceMock, ArrowTracesServiceMock, create_otap_batch,
     };
-    use otap_df_otap::pdata::OtapPdata;
+    use otel_arrow_dfe_otap::pdata::OtapPdata;
     use secrecy::ExposeSecret;
 
-    use otap_df_config::SignalType;
-    use otap_df_config::node::NodeUserConfig;
-    use otap_df_engine::Interests;
-    use otap_df_engine::context::ControllerContext;
-    use otap_df_engine::control::CallData;
-    use otap_df_engine::control::Controllable;
-    use otap_df_engine::control::NodeControlMsg;
-    use otap_df_engine::control::PipelineCompletionMsg;
-    use otap_df_engine::control::PipelineCompletionMsgReceiver;
-    use otap_df_engine::control::PipelineCompletionMsgSender;
-    use otap_df_engine::control::RuntimeCtrlMsgSender;
-    use otap_df_engine::control::{pipeline_completion_msg_channel, runtime_ctrl_msg_channel};
-    use otap_df_engine::error::Error;
-    use otap_df_engine::exporter::ExporterWrapper;
-    use otap_df_engine::local::message::LocalReceiver;
-    use otap_df_engine::local::message::LocalSender;
-    use otap_df_engine::message::Receiver;
-    use otap_df_engine::message::Sender;
-    use otap_df_engine::node::NodeWithPDataReceiver;
-    use otap_df_engine::testing::create_not_send_channel;
-    use otap_df_engine::testing::{
+    use otel_arrow_dfe_config::SignalType;
+    use otel_arrow_dfe_config::node::NodeUserConfig;
+    use otel_arrow_dfe_engine::Interests;
+    use otel_arrow_dfe_engine::context::ControllerContext;
+    use otel_arrow_dfe_engine::control::CallData;
+    use otel_arrow_dfe_engine::control::Controllable;
+    use otel_arrow_dfe_engine::control::NodeControlMsg;
+    use otel_arrow_dfe_engine::control::PipelineCompletionMsg;
+    use otel_arrow_dfe_engine::control::PipelineCompletionMsgReceiver;
+    use otel_arrow_dfe_engine::control::PipelineCompletionMsgSender;
+    use otel_arrow_dfe_engine::control::RuntimeCtrlMsgSender;
+    use otel_arrow_dfe_engine::control::{
+        pipeline_completion_msg_channel, runtime_ctrl_msg_channel,
+    };
+    use otel_arrow_dfe_engine::error::Error;
+    use otel_arrow_dfe_engine::exporter::ExporterWrapper;
+    use otel_arrow_dfe_engine::local::message::LocalReceiver;
+    use otel_arrow_dfe_engine::local::message::LocalSender;
+    use otel_arrow_dfe_engine::message::Receiver;
+    use otel_arrow_dfe_engine::message::Sender;
+    use otel_arrow_dfe_engine::node::NodeWithPDataReceiver;
+    use otel_arrow_dfe_engine::testing::create_not_send_channel;
+    use otel_arrow_dfe_engine::testing::{
         exporter::{TestContext, TestRuntime},
         test_node,
     };
-    use otap_df_otap::compression::CompressionMethod;
-    use otap_df_pdata::TryIntoWithOptions;
-    use otap_df_pdata::otap::OtapArrowRecords;
-    use otap_df_pdata::proto::opentelemetry::arrow::v1::{
+    use otel_arrow_dfe_otap::compression::CompressionMethod;
+    use otel_arrow_dfe_pdata::TryIntoWithOptions;
+    use otel_arrow_dfe_pdata::otap::OtapArrowRecords;
+    use otel_arrow_dfe_pdata::proto::opentelemetry::arrow::v1::{
         ArrowPayloadType, BatchArrowRecords, BatchStatus, StatusCode,
         arrow_logs_service_server::ArrowLogsServiceServer,
         arrow_metrics_service_server::ArrowMetricsServiceServer,
         arrow_traces_service_server::ArrowTracesServiceServer,
     };
-    use otap_df_telemetry::metrics::MetricSetSnapshot;
-    use otap_df_telemetry::registry::TelemetryRegistryHandle;
-    use otap_df_telemetry::reporter::MetricsReporter;
+    use otel_arrow_dfe_telemetry::metrics::MetricSetSnapshot;
+    use otel_arrow_dfe_telemetry::registry::TelemetryRegistryHandle;
+    use otel_arrow_dfe_telemetry::reporter::MetricsReporter;
     use serde_json::json;
     use std::net::SocketAddr;
     use std::ops::Add;
@@ -1337,7 +1341,7 @@ mod tests {
         let (shutdown_sender, shutdown_signal) = tokio::sync::oneshot::channel();
         let (ready_sender, ready_receiver) = tokio::sync::oneshot::channel();
         let grpc_addr = "127.0.0.1";
-        let grpc_port = otap_df_test_net::pick_unused_loopback_tcp_port();
+        let grpc_port = otel_arrow_dfe_test_net::pick_unused_loopback_tcp_port();
         let grpc_endpoint = format!("http://{grpc_addr}:{grpc_port}");
         let listening_addr: SocketAddr = format!("{grpc_addr}:{grpc_port}").parse().unwrap();
         // tokio runtime to run grpc server in the background
@@ -1705,7 +1709,7 @@ mod tests {
     #[test]
     fn test_receiver_not_ready_on_start() {
         let grpc_addr = "127.0.0.1";
-        let grpc_port = otap_df_test_net::pick_unused_loopback_tcp_port();
+        let grpc_port = otel_arrow_dfe_test_net::pick_unused_loopback_tcp_port();
         let grpc_endpoint = format!("http://{grpc_addr}:{grpc_port}");
         let tokio_rt = Runtime::new().unwrap();
 
@@ -2078,7 +2082,7 @@ mod tests {
     struct ArrowLogsServiceOutOfOrderStatusMock;
 
     #[tonic::async_trait]
-    impl otap_df_pdata::proto::opentelemetry::arrow::v1::arrow_logs_service_server::ArrowLogsService
+    impl otel_arrow_dfe_pdata::proto::opentelemetry::arrow::v1::arrow_logs_service_server::ArrowLogsService
         for ArrowLogsServiceOutOfOrderStatusMock
     {
         type ArrowLogsStream = std::pin::Pin<
@@ -2131,10 +2135,10 @@ mod tests {
     /// correlation, and a non-OK BatchStatus must NACK the matched pdata.
     #[test]
     fn test_out_of_order_batch_status_uses_batch_id_correlation() {
-        use otap_df_pdata::proto::opentelemetry::arrow::v1::arrow_logs_service_server::ArrowLogsServiceServer;
+        use otel_arrow_dfe_pdata::proto::opentelemetry::arrow::v1::arrow_logs_service_server::ArrowLogsServiceServer;
 
         let grpc_addr = "127.0.0.1";
-        let grpc_port = otap_df_test_net::pick_unused_loopback_tcp_port();
+        let grpc_port = otel_arrow_dfe_test_net::pick_unused_loopback_tcp_port();
         let grpc_endpoint = format!("http://{grpc_addr}:{grpc_port}");
         let tokio_rt = Runtime::new().unwrap();
 
@@ -2280,7 +2284,7 @@ mod tests {
     }
 
     #[tonic::async_trait]
-    impl otap_df_pdata::proto::opentelemetry::arrow::v1::arrow_logs_service_server::ArrowLogsService
+    impl otel_arrow_dfe_pdata::proto::opentelemetry::arrow::v1::arrow_logs_service_server::ArrowLogsService
         for ArrowLogsServicePendingStatusMock
     {
         type ArrowLogsStream = std::pin::Pin<
@@ -2315,7 +2319,7 @@ mod tests {
     #[test]
     fn test_shutdown_nacks_correlated_pdata() {
         let grpc_addr = "127.0.0.1";
-        let grpc_port = otap_df_test_net::pick_unused_loopback_tcp_port();
+        let grpc_port = otel_arrow_dfe_test_net::pick_unused_loopback_tcp_port();
         let grpc_endpoint = format!("http://{grpc_addr}:{grpc_port}");
         let tokio_rt = Runtime::new().unwrap();
 
@@ -2455,7 +2459,7 @@ mod tests {
     }
 
     #[tonic::async_trait]
-    impl otap_df_pdata::proto::opentelemetry::arrow::v1::arrow_logs_service_server::ArrowLogsService
+    impl otel_arrow_dfe_pdata::proto::opentelemetry::arrow::v1::arrow_logs_service_server::ArrowLogsService
         for ArrowLogsServiceGrpcErrorMock
     {
         type ArrowLogsStream = std::pin::Pin<
@@ -2491,10 +2495,10 @@ mod tests {
     /// a NACK for the corresponding pdata.
     #[test]
     fn test_grpc_error_in_response_stream() {
-        use otap_df_pdata::proto::opentelemetry::arrow::v1::arrow_logs_service_server::ArrowLogsServiceServer;
+        use otel_arrow_dfe_pdata::proto::opentelemetry::arrow::v1::arrow_logs_service_server::ArrowLogsServiceServer;
 
         let grpc_addr = "127.0.0.1";
-        let grpc_port = otap_df_test_net::pick_unused_loopback_tcp_port();
+        let grpc_port = otel_arrow_dfe_test_net::pick_unused_loopback_tcp_port();
         let grpc_endpoint = format!("http://{grpc_addr}:{grpc_port}");
         let tokio_rt = Runtime::new().unwrap();
 
@@ -2678,7 +2682,7 @@ mod tests {
     }
 
     #[tonic::async_trait]
-    impl otap_df_pdata::proto::opentelemetry::arrow::v1::arrow_logs_service_server::ArrowLogsService
+    impl otel_arrow_dfe_pdata::proto::opentelemetry::arrow::v1::arrow_logs_service_server::ArrowLogsService
         for CapturingLogsMock
     {
         type ArrowLogsStream = BatchStatusStream;
@@ -2692,7 +2696,7 @@ mod tests {
     }
 
     #[tonic::async_trait]
-    impl otap_df_pdata::proto::opentelemetry::arrow::v1::arrow_metrics_service_server::ArrowMetricsService
+    impl otel_arrow_dfe_pdata::proto::opentelemetry::arrow::v1::arrow_metrics_service_server::ArrowMetricsService
         for CapturingMetricsMock
     {
         type ArrowMetricsStream = BatchStatusStream;
@@ -2706,7 +2710,7 @@ mod tests {
     }
 
     #[tonic::async_trait]
-    impl otap_df_pdata::proto::opentelemetry::arrow::v1::arrow_traces_service_server::ArrowTracesService
+    impl otel_arrow_dfe_pdata::proto::opentelemetry::arrow::v1::arrow_traces_service_server::ArrowTracesService
         for CapturingTracesMock
     {
         type ArrowTracesStream = BatchStatusStream;
@@ -2760,7 +2764,7 @@ mod tests {
         let (shutdown_sender, shutdown_signal) = tokio::sync::oneshot::channel();
         let (ready_sender, ready_receiver) = tokio::sync::oneshot::channel();
         let grpc_addr = "127.0.0.1";
-        let grpc_port = otap_df_test_net::pick_unused_loopback_tcp_port();
+        let grpc_port = otel_arrow_dfe_test_net::pick_unused_loopback_tcp_port();
         let grpc_endpoint = format!("http://{grpc_addr}:{grpc_port}");
         let listening_addr: SocketAddr = format!("{grpc_addr}:{grpc_port}").parse().unwrap();
         let tokio_rt = Runtime::new().unwrap();
@@ -2884,7 +2888,7 @@ mod tests {
         let (shutdown_sender, shutdown_signal) = tokio::sync::oneshot::channel();
         let (ready_sender, ready_receiver) = tokio::sync::oneshot::channel();
         let grpc_addr = "127.0.0.1";
-        let grpc_port = otap_df_test_net::pick_unused_loopback_tcp_port();
+        let grpc_port = otel_arrow_dfe_test_net::pick_unused_loopback_tcp_port();
         let grpc_endpoint = format!("http://{grpc_addr}:{grpc_port}");
         let listening_addr: SocketAddr = format!("{grpc_addr}:{grpc_port}").parse().unwrap();
         let tokio_rt = Runtime::new().unwrap();
@@ -2993,7 +2997,7 @@ mod tests {
 
         let mut headers = std::collections::HashMap::new();
         let _ = headers.insert(HDR_AUTH.to_string(), HDR_AUTH_VAL.into());
-        let settings = otap_df_otap::otap_grpc::client_settings::GrpcClientSettings {
+        let settings = otel_arrow_dfe_otap::otap_grpc::client_settings::GrpcClientSettings {
             headers,
             ..Default::default()
         };

@@ -7,7 +7,7 @@ than the server implementation crate.
 It provides:
 
 - a re-export of the public engine configuration model via
-  `otap_df_admin_api::config`;
+  `otel_arrow_dfe_admin_api::config`;
 - shared admin request and response models;
 - an async `AdminClient` facade for the admin endpoints currently exposed by
   the public SDK;
@@ -88,7 +88,7 @@ Use this when the client connects directly to the engine on loopback or inside
 an internal trusted network.
 
 ```rust
-use otap_df_admin_api::{AdminClient, AdminEndpoint, HttpAdminClientSettings};
+use otel_arrow_dfe_admin_api::{AdminClient, AdminEndpoint, HttpAdminClientSettings};
 
 # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 let client = AdminClient::builder()
@@ -107,7 +107,7 @@ Use this when the client connects through a reverse proxy, ingress, or gateway
 that presents a TLS certificate signed by an internal CA.
 
 ```rust
-use otap_df_admin_api::{
+use otel_arrow_dfe_admin_api::{
     config::tls::TlsClientConfig, AdminClient, AdminEndpoint,
     HttpAdminClientSettings,
 };
@@ -136,7 +136,7 @@ println!("ready={:?}", ready.status);
 Use this when the proxy or gateway requires client certificate authentication.
 
 ```rust
-use otap_df_admin_api::{
+use otel_arrow_dfe_admin_api::{
     config::tls::{TlsClientConfig, TlsConfig},
     AdminClient, AdminEndpoint, HttpAdminClientSettings,
 };
@@ -171,7 +171,7 @@ Use this only for controlled lab or bring-up scenarios where you knowingly
 accept certificate validation risk.
 
 ```rust
-use otap_df_admin_api::{
+use otel_arrow_dfe_admin_api::{
     config::tls::TlsClientConfig, AdminClient, AdminEndpoint,
     HttpAdminClientSettings,
 };
@@ -202,7 +202,7 @@ Use this when the proxy exposes the admin API under a URL prefix instead of at
 the origin root.
 
 ```rust
-use otap_df_admin_api::{AdminClient, AdminEndpoint, HttpAdminClientSettings};
+use otel_arrow_dfe_admin_api::{AdminClient, AdminEndpoint, HttpAdminClientSettings};
 
 # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 let endpoint = AdminEndpoint::from_url("https://admin.example.com/engine-a")?;
@@ -290,7 +290,7 @@ typed SDK error via `Error::AdminOperation`.
 Use these methods for orchestration, startup checks, and fleet snapshots.
 
 ```rust
-use otap_df_admin_api::{AdminClient, AdminEndpoint, HttpAdminClientSettings};
+use otel_arrow_dfe_admin_api::{AdminClient, AdminEndpoint, HttpAdminClientSettings};
 
 # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 let client = AdminClient::builder()
@@ -314,7 +314,7 @@ Use this when an operator or control plane needs a fleet view and a single
 engine-wide shutdown entrypoint.
 
 ```rust
-use otap_df_admin_api::{
+use otel_arrow_dfe_admin_api::{
     operations::OperationOptions, AdminClient, AdminEndpoint,
     HttpAdminClientSettings,
 };
@@ -346,7 +346,7 @@ SDK returns transport-agnostic probe results here; the current HTTP backend
 maps the server's plain-text probe endpoints into this semantic shape.
 
 ```rust
-use otap_df_admin_api::{AdminClient, AdminEndpoint, HttpAdminClientSettings};
+use otel_arrow_dfe_admin_api::{AdminClient, AdminEndpoint, HttpAdminClientSettings};
 
 # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 let client = AdminClient::builder()
@@ -370,7 +370,7 @@ Use retained logs for operational debugging when the server is configured to
 keep them.
 
 ```rust
-use otap_df_admin_api::{
+use otel_arrow_dfe_admin_api::{
     telemetry::LogsQuery, AdminClient, AdminEndpoint, HttpAdminClientSettings,
 };
 
@@ -404,7 +404,7 @@ Use `telemetry().metrics(...)` for the full structured JSON view, or
 `telemetry().metrics_compact(...)` for the compact structured JSON view.
 
 ```rust
-use otap_df_admin_api::{
+use otel_arrow_dfe_admin_api::{
     telemetry::MetricsOptions,
     AdminClient, AdminEndpoint, HttpAdminClientSettings,
 };

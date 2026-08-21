@@ -11,8 +11,8 @@
 use geneva_uploader::client::{
     AgentFedCredential, AgentFedCredentialFuture, AgentFedCredentialSource,
 };
-use otap_df_engine::shared::capability::auth::agent_fed_credential_provider::AgentFedCredentialProvider;
-use otap_df_telemetry::otel_warn;
+use otel_arrow_dfe_engine::shared::capability::auth::agent_fed_credential_provider::AgentFedCredentialProvider;
+use otel_arrow_dfe_telemetry::otel_warn;
 use serde_json::{Map, Value};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
@@ -251,11 +251,11 @@ fn resolve_routing<'a>(
 mod tests {
     use super::*;
     use async_trait::async_trait;
-    use otap_df_engine::capability::auth::BearerToken;
-    use otap_df_engine::capability::auth::agent_fed_credential_provider::{
+    use otel_arrow_dfe_engine::capability::auth::BearerToken;
+    use otel_arrow_dfe_engine::capability::auth::agent_fed_credential_provider::{
         AgentFedCredentialProvider as AgentFedCredentialProviderCap, AgentFedCredentialSnapshot,
     };
-    use otap_df_engine::capability::{CapabilityError, CapabilityErrorSource};
+    use otel_arrow_dfe_engine::capability::{CapabilityError, CapabilityErrorSource};
     use serde_json::{Map, Value, json};
     use std::sync::atomic::AtomicUsize;
     use std::sync::{Arc, RwLock};

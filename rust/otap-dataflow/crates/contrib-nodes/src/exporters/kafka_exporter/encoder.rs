@@ -3,8 +3,8 @@
 
 //! Encoding logic for converting OTAP payloads to bytes for Kafka.
 
-use otap_df_pdata::{OtapArrowRecords, Producer as PdataProducer};
-use otap_df_pdata::{OtapPayload, OtlpProtoBytes, TryIntoWithOptions};
+use otel_arrow_dfe_pdata::{OtapArrowRecords, Producer as PdataProducer};
+use otel_arrow_dfe_pdata::{OtapPayload, OtlpProtoBytes, TryIntoWithOptions};
 
 use prost::Message as ProstMessage;
 

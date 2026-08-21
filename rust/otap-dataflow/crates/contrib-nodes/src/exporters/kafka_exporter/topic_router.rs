@@ -24,8 +24,8 @@
 use super::config::SignalConfig;
 use super::metrics::KafkaExporterMetrics;
 use crate::common::kafka::validate_kafka_topic;
-use otap_df_config::transport_headers::TransportHeader;
-use otap_df_otap::pdata::Context;
+use otel_arrow_dfe_config::transport_headers::TransportHeader;
+use otel_arrow_dfe_otap::pdata::Context;
 use std::borrow::Cow;
 
 /// Error returned when topic routing cannot produce a usable Kafka topic.
@@ -52,7 +52,7 @@ impl TopicRoutingError {
     fn invalid_header_topic(topic: impl Into<String>, reason: impl Into<String>) -> Self {
         let topic = topic.into();
         let reason = reason.into();
-        otap_df_telemetry::otel_warn!(
+        otel_arrow_dfe_telemetry::otel_warn!(
             "kafka.exporter.topic.invalid_header",
             header_topic = %topic,
             %reason,
@@ -146,8 +146,8 @@ impl TopicRouter {
 mod tests {
     use super::*;
     use crate::common::kafka::MessageFormat;
-    use otap_df_config::transport_headers::{TransportHeader, TransportHeaders, ValueKind};
-    use otap_df_otap::pdata::Context;
+    use otel_arrow_dfe_config::transport_headers::{TransportHeader, TransportHeaders, ValueKind};
+    use otel_arrow_dfe_otap::pdata::Context;
 
     // ---- Test helpers ----
 

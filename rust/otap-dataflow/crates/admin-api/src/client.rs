@@ -177,8 +177,8 @@ impl AdminClient {
     /// # Examples
     ///
     /// ```rust
-    /// # use otap_df_admin_api::{AdminClient, AdminEndpoint, HttpAdminClientSettings};
-    /// # fn example() -> Result<(), otap_df_admin_api::Error> {
+    /// # use otel_arrow_dfe_admin_api::{AdminClient, AdminEndpoint, HttpAdminClientSettings};
+    /// # fn example() -> Result<(), otel_arrow_dfe_admin_api::Error> {
     /// let client = AdminClient::builder()
     ///     .http(HttpAdminClientSettings::new(AdminEndpoint::http(
     ///         "engine-a.internal.example",
@@ -242,7 +242,7 @@ impl EngineClient<'_> {
     /// # Examples
     ///
     /// ```rust
-    /// # use otap_df_admin_api::{AdminClient, AdminEndpoint, HttpAdminClientSettings};
+    /// # use otel_arrow_dfe_admin_api::{AdminClient, AdminEndpoint, HttpAdminClientSettings};
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// # let client = AdminClient::builder()
     /// #     .http(HttpAdminClientSettings::new(AdminEndpoint::http(
@@ -267,7 +267,7 @@ impl EngineClient<'_> {
     /// # Examples
     ///
     /// ```rust
-    /// # use otap_df_admin_api::{AdminClient, AdminEndpoint, HttpAdminClientSettings};
+    /// # use otel_arrow_dfe_admin_api::{AdminClient, AdminEndpoint, HttpAdminClientSettings};
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// # let client = AdminClient::builder()
     /// #     .http(HttpAdminClientSettings::new(AdminEndpoint::http(
@@ -292,7 +292,7 @@ impl EngineClient<'_> {
     /// # Examples
     ///
     /// ```rust
-    /// # use otap_df_admin_api::{AdminClient, AdminEndpoint, HttpAdminClientSettings};
+    /// # use otel_arrow_dfe_admin_api::{AdminClient, AdminEndpoint, HttpAdminClientSettings};
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// # let client = AdminClient::builder()
     /// #     .http(HttpAdminClientSettings::new(AdminEndpoint::http(
@@ -325,7 +325,7 @@ impl GroupsClient<'_> {
     /// # Examples
     ///
     /// ```rust
-    /// # use otap_df_admin_api::{AdminClient, AdminEndpoint, HttpAdminClientSettings};
+    /// # use otel_arrow_dfe_admin_api::{AdminClient, AdminEndpoint, HttpAdminClientSettings};
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// # let client = AdminClient::builder()
     /// #     .http(HttpAdminClientSettings::new(AdminEndpoint::http(
@@ -382,7 +382,7 @@ impl GroupsClient<'_> {
     /// # Examples
     ///
     /// ```rust
-    /// # use otap_df_admin_api::{
+    /// # use otel_arrow_dfe_admin_api::{
     /// #     groups, operations, AdminClient, AdminEndpoint, HttpAdminClientSettings,
     /// # };
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
@@ -435,7 +435,7 @@ impl PipelinesClient<'_> {
     /// # Examples
     ///
     /// ```rust
-    /// # use otap_df_admin_api::{AdminClient, AdminEndpoint, HttpAdminClientSettings};
+    /// # use otel_arrow_dfe_admin_api::{AdminClient, AdminEndpoint, HttpAdminClientSettings};
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// # let client = AdminClient::builder()
     /// #     .http(HttpAdminClientSettings::new(AdminEndpoint::http(
@@ -486,7 +486,7 @@ impl PipelinesClient<'_> {
     /// # Examples
     ///
     /// ```rust
-    /// # use otap_df_admin_api::{
+    /// # use otel_arrow_dfe_admin_api::{
     /// #     config::pipeline::{PipelineConfigBuilder, PipelineType},
     /// #     operations, pipelines, AdminClient, AdminEndpoint, HttpAdminClientSettings,
     /// # };
@@ -560,7 +560,7 @@ impl PipelinesClient<'_> {
     /// # Examples
     ///
     /// ```rust
-    /// # use otap_df_admin_api::{AdminClient, AdminEndpoint, HttpAdminClientSettings};
+    /// # use otel_arrow_dfe_admin_api::{AdminClient, AdminEndpoint, HttpAdminClientSettings};
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// # let client = AdminClient::builder()
     /// #     .http(HttpAdminClientSettings::new(AdminEndpoint::http(
@@ -602,7 +602,7 @@ impl PipelinesClient<'_> {
     /// # Examples
     ///
     /// ```rust
-    /// # use otap_df_admin_api::{AdminClient, AdminEndpoint, HttpAdminClientSettings};
+    /// # use otel_arrow_dfe_admin_api::{AdminClient, AdminEndpoint, HttpAdminClientSettings};
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// # let client = AdminClient::builder()
     /// #     .http(HttpAdminClientSettings::new(AdminEndpoint::http(
@@ -649,7 +649,7 @@ impl PipelinesClient<'_> {
     /// # Examples
     ///
     /// ```rust
-    /// # use otap_df_admin_api::{operations, pipelines, AdminClient, AdminEndpoint, HttpAdminClientSettings};
+    /// # use otel_arrow_dfe_admin_api::{operations, pipelines, AdminClient, AdminEndpoint, HttpAdminClientSettings};
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// # let client = AdminClient::builder()
     /// #     .http(HttpAdminClientSettings::new(AdminEndpoint::http(
@@ -709,7 +709,7 @@ impl PipelinesClient<'_> {
     /// # Examples
     ///
     /// ```rust
-    /// # use otap_df_admin_api::{AdminClient, AdminEndpoint, HttpAdminClientSettings};
+    /// # use otel_arrow_dfe_admin_api::{AdminClient, AdminEndpoint, HttpAdminClientSettings};
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// # let client = AdminClient::builder()
     /// #     .http(HttpAdminClientSettings::new(AdminEndpoint::http(
@@ -757,7 +757,7 @@ impl PipelinesClient<'_> {
     /// # Examples
     ///
     /// ```rust
-    /// # use otap_df_admin_api::{pipelines, AdminClient, AdminEndpoint, HttpAdminClientSettings};
+    /// # use otel_arrow_dfe_admin_api::{pipelines, AdminClient, AdminEndpoint, HttpAdminClientSettings};
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// # let client = AdminClient::builder()
     /// #     .http(HttpAdminClientSettings::new(AdminEndpoint::http(
@@ -788,7 +788,7 @@ impl PipelinesClient<'_> {
     /// # Examples
     ///
     /// ```rust
-    /// # use otap_df_admin_api::{pipelines, AdminClient, AdminEndpoint, HttpAdminClientSettings};
+    /// # use otel_arrow_dfe_admin_api::{pipelines, AdminClient, AdminEndpoint, HttpAdminClientSettings};
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// # let client = AdminClient::builder()
     /// #     .http(HttpAdminClientSettings::new(AdminEndpoint::http(
@@ -833,7 +833,7 @@ impl TelemetryClient<'_> {
     /// # Examples
     ///
     /// ```rust
-    /// # use otap_df_admin_api::{telemetry, AdminClient, AdminEndpoint, HttpAdminClientSettings};
+    /// # use otel_arrow_dfe_admin_api::{telemetry, AdminClient, AdminEndpoint, HttpAdminClientSettings};
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// # let client = AdminClient::builder()
     /// #     .http(HttpAdminClientSettings::new(AdminEndpoint::http(
@@ -870,7 +870,7 @@ impl TelemetryClient<'_> {
     /// # Examples
     ///
     /// ```rust
-    /// # use otap_df_admin_api::{telemetry, AdminClient, AdminEndpoint, HttpAdminClientSettings};
+    /// # use otel_arrow_dfe_admin_api::{telemetry, AdminClient, AdminEndpoint, HttpAdminClientSettings};
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// # let client = AdminClient::builder()
     /// #     .http(HttpAdminClientSettings::new(AdminEndpoint::http(
@@ -906,7 +906,7 @@ impl TelemetryClient<'_> {
     /// # Examples
     ///
     /// ```rust
-    /// # use otap_df_admin_api::{telemetry, AdminClient, AdminEndpoint, HttpAdminClientSettings};
+    /// # use otel_arrow_dfe_admin_api::{telemetry, AdminClient, AdminEndpoint, HttpAdminClientSettings};
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// # let client = AdminClient::builder()
     /// #     .http(HttpAdminClientSettings::new(AdminEndpoint::http(

@@ -14,11 +14,11 @@ use crate::pdata::{Context, OtapPdata};
 use futures::future::BoxFuture;
 use futures::stream::FuturesUnordered;
 use futures::{FutureExt, StreamExt as FuturesStreamExt};
-use otap_df_engine::{
+use otel_arrow_dfe_engine::{
     Interests, MessageSourceSharedEffectHandlerExtension, ProducerEffectHandlerExtension,
     memory_limiter::SharedReceiverAdmissionState, shared::receiver as shared,
 };
-use otap_df_pdata::{
+use otel_arrow_dfe_pdata::{
     Consumer,
     otap::{Logs, Metrics, OtapArrowRecords, OtapBatchStore, Traces, from_record_messages},
     proto::opentelemetry::arrow::v1::{
@@ -27,7 +27,7 @@ use otap_df_pdata::{
         arrow_traces_service_server::ArrowTracesService,
     },
 };
-use otap_df_telemetry::{otel_error, otel_warn};
+use otel_arrow_dfe_telemetry::{otel_error, otel_warn};
 use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -550,7 +550,7 @@ where
 async fn wait_for_pending_response(
     batch_id: i64,
     _cancel_guard: otlp::server::SlotGuard,
-    rx: oneshot::Receiver<Result<(), otap_df_engine::control::NackMsg<OtapPdata>>>,
+    rx: oneshot::Receiver<Result<(), otel_arrow_dfe_engine::control::NackMsg<OtapPdata>>>,
 ) -> PendingResponse {
     match rx.await {
         Ok(Ok(())) => PendingResponse::Ack { batch_id },
@@ -595,8 +595,8 @@ async fn send_pending_response(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use otap_df_config::policy::MemoryLimiterMode;
-    use otap_df_engine::memory_limiter::{
+    use otel_arrow_dfe_config::policy::MemoryLimiterMode;
+    use otel_arrow_dfe_engine::memory_limiter::{
         MemoryPressureBehaviorConfig, MemoryPressureLevel, MemoryPressureState,
     };
     use std::sync::atomic::{AtomicUsize, Ordering};

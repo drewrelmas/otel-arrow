@@ -502,7 +502,7 @@ azure_identity = { workspace = true, optional = true }
 
 **Crypto provider prerequisite.** The Azure SDK's `reqwest`/`rustls` HTTP client
 requires a process-wide `rustls` crypto provider. `Auth::new()` calls
-`otap_df_otap::crypto::ensure_crypto_provider()` before constructing any
+`otel_arrow_dfe_otap::crypto::ensure_crypto_provider()` before constructing any
 credential, and the deployed binary **must** enable exactly one `crypto-*`
 feature (`crypto-ring`, `crypto-aws-lc`, `crypto-openssl`, or `crypto-symcrypt`);
 otherwise all token requests panic at runtime with "No provider set". Tests
@@ -531,7 +531,7 @@ pub static AZURE_IDENTITY_AUTH_EXTENSION: ExtensionFactory = ExtensionFactory {
 
 The URN follows the [URN format](../../../../docs/urns.md): `urn:microsoft:extension:azure_identity_auth`
 (`microsoft` namespace, `extension` kind). The main binary links the crate with
-a side-effect import (`use otap_df_contrib_extensions as _;`) so the
+a side-effect import (`use otel_arrow_dfe_contrib_extensions as _;`) so the
 registration takes effect.
 
 ## Security Considerations

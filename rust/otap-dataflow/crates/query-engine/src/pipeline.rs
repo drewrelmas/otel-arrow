@@ -15,8 +15,8 @@ use datafusion::execution::context::SessionContext;
 use datafusion::physical_plan::common::collect;
 use datafusion::physical_plan::streaming::PartitionStream;
 use datafusion::physical_plan::{ExecutionPlan, execute_stream};
-use otap_df_pdata::OtapArrowRecords;
-use otap_df_pdata::proto::opentelemetry::arrow::v1::ArrowPayloadType;
+use otel_arrow_dfe_pdata::OtapArrowRecords;
+use otel_arrow_dfe_pdata::proto::opentelemetry::arrow::v1::ArrowPayloadType;
 use std::sync::Arc;
 
 use crate::error::{Error, Result};
@@ -381,19 +381,19 @@ mod test {
     use data_engine_parser_abstractions::Parser;
     use datafusion::catalog::streaming::StreamingTable;
     use datafusion::logical_expr::{col, lit};
-    use otap_df_pdata::proto::OtlpProtoMessage;
-    use otap_df_pdata::proto::opentelemetry::arrow::v1::ArrowPayloadType;
-    use otap_df_pdata::proto::opentelemetry::logs::v1::{LogRecord, LogsData};
-    use otap_df_pdata::proto::opentelemetry::metrics::v1::MetricsData;
-    use otap_df_pdata::proto::opentelemetry::trace::v1::TracesData;
-    use otap_df_pdata::testing::round_trip::{otlp_to_otap, to_otap_logs};
-    use otap_df_pdata::{OtapPayload, OtlpProtoBytes};
+    use otel_arrow_dfe_pdata::proto::OtlpProtoMessage;
+    use otel_arrow_dfe_pdata::proto::opentelemetry::arrow::v1::ArrowPayloadType;
+    use otel_arrow_dfe_pdata::proto::opentelemetry::logs::v1::{LogRecord, LogsData};
+    use otel_arrow_dfe_pdata::proto::opentelemetry::metrics::v1::MetricsData;
+    use otel_arrow_dfe_pdata::proto::opentelemetry::trace::v1::TracesData;
+    use otel_arrow_dfe_pdata::testing::round_trip::{otlp_to_otap, to_otap_logs};
+    use otel_arrow_dfe_pdata::{OtapPayload, OtlpProtoBytes};
     use prost::Message;
 
     use crate::parser::default_parser_options;
 
     use super::*;
-    use otap_df_pdata::TryIntoWithOptions;
+    use otel_arrow_dfe_pdata::TryIntoWithOptions;
 
     /// helper function for converting [`OtapArrowRecords`] to [`LogsData`]
     pub fn otap_to_logs_data(otap_batch: OtapArrowRecords) -> LogsData {

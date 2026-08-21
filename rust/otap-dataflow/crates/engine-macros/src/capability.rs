@@ -484,7 +484,7 @@ pub(crate) fn expand_capability(args: CapabilityArgs, trait_item: ItemTrait) -> 
             /// envelope the registry expects.
             #[allow(non_snake_case, clippy::missing_errors_doc)]
             #vis fn shared_entry<E>(
-                extension_id: ::otap_df_config::ExtensionId,
+                extension_id: ::otel_arrow_dfe_config::ExtensionId,
                 factory: crate::capability::SharedInstanceFactory,
             ) -> crate::capability::registry::SharedCapabilityEntry
             where
@@ -528,7 +528,7 @@ pub(crate) fn expand_capability(args: CapabilityArgs, trait_item: ItemTrait) -> 
             /// under the double-`Box` envelope expected by the registry.
             #[allow(non_snake_case, clippy::missing_errors_doc)]
             #vis fn local_entry<E>(
-                extension_id: ::otap_df_config::ExtensionId,
+                extension_id: ::otel_arrow_dfe_config::ExtensionId,
                 factory: crate::capability::LocalInstanceFactory,
             ) -> crate::capability::registry::LocalCapabilityEntry
             where

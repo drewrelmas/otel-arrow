@@ -19,51 +19,51 @@ use bytes::{Bytes, BytesMut};
 use futures::StreamExt;
 use http::{HeaderMap, HeaderValue, StatusCode};
 use linkme::distributed_slice;
-use otap_df_config::SignalType;
-use otap_df_config::error::Error as ConfigError;
-use otap_df_config::node::NodeUserConfig;
-use otap_df_engine::config::ExporterConfig;
-use otap_df_engine::context::PipelineContext;
-use otap_df_engine::control::{AckMsg, NackMsg, NodeControlMsg};
-use otap_df_engine::error::{Error as EngineError, ExporterErrorKind};
-use otap_df_engine::exporter::ExporterWrapper;
-use otap_df_engine::local::capability::auth::bearer_token_provider::BearerTokenProvider;
-use otap_df_engine::local::exporter::{EffectHandler, Exporter};
-use otap_df_engine::message::{ExporterInbox, Message};
-use otap_df_engine::node::NodeId;
-use otap_df_engine::terminal_state::TerminalState;
-use otap_df_engine::wiring_contract::WiringContract;
-use otap_df_engine::{ConsumerEffectHandlerExtension, ExporterFactory};
+use otel_arrow_dfe_config::SignalType;
+use otel_arrow_dfe_config::error::Error as ConfigError;
+use otel_arrow_dfe_config::node::NodeUserConfig;
+use otel_arrow_dfe_engine::config::ExporterConfig;
+use otel_arrow_dfe_engine::context::PipelineContext;
+use otel_arrow_dfe_engine::control::{AckMsg, NackMsg, NodeControlMsg};
+use otel_arrow_dfe_engine::error::{Error as EngineError, ExporterErrorKind};
+use otel_arrow_dfe_engine::exporter::ExporterWrapper;
+use otel_arrow_dfe_engine::local::capability::auth::bearer_token_provider::BearerTokenProvider;
+use otel_arrow_dfe_engine::local::exporter::{EffectHandler, Exporter};
+use otel_arrow_dfe_engine::message::{ExporterInbox, Message};
+use otel_arrow_dfe_engine::node::NodeId;
+use otel_arrow_dfe_engine::terminal_state::TerminalState;
+use otel_arrow_dfe_engine::wiring_contract::WiringContract;
+use otel_arrow_dfe_engine::{ConsumerEffectHandlerExtension, ExporterFactory};
 #[cfg(test)]
-use otap_df_pdata::TryIntoWithOptions;
-use otap_df_pdata::otlp::logs::LogsProtoBytesEncoder;
-use otap_df_pdata::otlp::metrics::MetricsProtoBytesEncoder;
-use otap_df_pdata::otlp::traces::TracesProtoBytesEncoder;
-use otap_df_pdata::otlp::{ProtoBuffer, ProtoBytesEncoder};
-use otap_df_pdata::proto::opentelemetry::collector::logs::v1::{
+use otel_arrow_dfe_pdata::TryIntoWithOptions;
+use otel_arrow_dfe_pdata::otlp::logs::LogsProtoBytesEncoder;
+use otel_arrow_dfe_pdata::otlp::metrics::MetricsProtoBytesEncoder;
+use otel_arrow_dfe_pdata::otlp::traces::TracesProtoBytesEncoder;
+use otel_arrow_dfe_pdata::otlp::{ProtoBuffer, ProtoBytesEncoder};
+use otel_arrow_dfe_pdata::proto::opentelemetry::collector::logs::v1::{
     ExportLogsPartialSuccess, ExportLogsServiceResponse,
 };
-use otap_df_pdata::proto::opentelemetry::collector::metrics::v1::{
+use otel_arrow_dfe_pdata::proto::opentelemetry::collector::metrics::v1::{
     ExportMetricsPartialSuccess, ExportMetricsServiceResponse,
 };
-use otap_df_pdata::proto::opentelemetry::collector::trace::v1::{
+use otel_arrow_dfe_pdata::proto::opentelemetry::collector::trace::v1::{
     ExportTracePartialSuccess, ExportTraceServiceResponse,
 };
-use otap_df_pdata::{OtapPayload, OtapPayloadHelpers};
-use otap_df_telemetry::common_attributes::{Outcome, SignalOutcomeAttributes};
-use otap_df_telemetry::metrics::MeasurementMetricSet;
-use otap_df_telemetry::{otel_debug, otel_info, otel_warn};
+use otel_arrow_dfe_pdata::{OtapPayload, OtapPayloadHelpers};
+use otel_arrow_dfe_telemetry::common_attributes::{Outcome, SignalOutcomeAttributes};
+use otel_arrow_dfe_telemetry::metrics::MeasurementMetricSet;
+use otel_arrow_dfe_telemetry::{otel_debug, otel_info, otel_warn};
 use prost::Message as _;
 use reqwest::{Client, Response};
 use secrecy::ExposeSecret;
 
 use self::config::Config;
 use crate::exporters::otlp_grpc_exporter::InFlightExports;
-use otap_df_otap::OTAP_EXPORTER_FACTORIES;
-use otap_df_otap::metrics::ExporterPDataExportMetrics;
-use otap_df_otap::otlp_http::client_settings::{HttpClientError, HttpClientSettings};
-use otap_df_otap::otlp_http::{LOGS_PATH, METRICS_PATH, PROTOBUF_CONTENT_TYPE, TRACES_PATH};
-use otap_df_otap::pdata::{Context, OtapPdata};
+use otel_arrow_dfe_otap::OTAP_EXPORTER_FACTORIES;
+use otel_arrow_dfe_otap::metrics::ExporterPDataExportMetrics;
+use otel_arrow_dfe_otap::otlp_http::client_settings::{HttpClientError, HttpClientSettings};
+use otel_arrow_dfe_otap::otlp_http::{LOGS_PATH, METRICS_PATH, PROTOBUF_CONTENT_TYPE, TRACES_PATH};
+use otel_arrow_dfe_otap::pdata::{Context, OtapPdata};
 
 use self::bearer_auth::BearerAuth;
 
@@ -86,7 +86,7 @@ pub struct OtlpHttpExporter {
 
 /// Declare the OTLP HTTP Exporter as a local exporter factory
 #[allow(unsafe_code)]
-#[otap_df_engine::component_inventory(category = Exporter)]
+#[otel_arrow_dfe_engine::component_inventory(category = Exporter)]
 #[distributed_slice(OTAP_EXPORTER_FACTORIES)]
 pub static OTLP_HTTP_EXPORTER: ExporterFactory<OtapPdata> = ExporterFactory {
     name: OTLP_HTTP_EXPORTER_URN,
@@ -118,13 +118,13 @@ fn factory_create(
     node: NodeId,
     node_config: Arc<NodeUserConfig>,
     exporter_config: &ExporterConfig,
-    capabilities: &otap_df_engine::capability::registry::Capabilities,
+    capabilities: &otel_arrow_dfe_engine::capability::registry::Capabilities,
 ) -> Result<ExporterWrapper<OtapPdata>, ConfigError> {
     // Optionally resolve a bound bearer token provider. Absent binding keeps the
     // default (no-auth) behavior; a bound provider (e.g. the `azure_identity_auth`
     // extension) supplies refreshed OAuth tokens.
     let token_provider = capabilities
-        .optional_local::<otap_df_engine::capability::auth::bearer_token_provider::BearerTokenProvider>()
+        .optional_local::<otel_arrow_dfe_engine::capability::auth::bearer_token_provider::BearerTokenProvider>()
         .map_err(|e| ConfigError::InvalidUserConfig {
             error: e.to_string(),
         })?;
@@ -146,7 +146,7 @@ impl OtlpHttpExporter {
         let pdata_metrics = ExporterPDataExportMetrics::register(&pipeline_ctx);
 
         let config: Config = serde_json::from_value(config.clone()).map_err(|e| {
-            otap_df_config::error::Error::InvalidUserConfig {
+            otel_arrow_dfe_config::error::Error::InvalidUserConfig {
                 error: e.to_string(),
             }
         })?;
@@ -1033,29 +1033,29 @@ mod test {
     use hyper::server::conn::http1;
     use hyper::service::service_fn;
     use hyper_util::rt::TokioIo;
-    use otap_df_config::PortName;
-    use otap_df_engine::Interests;
-    use otap_df_engine::context::ControllerContext;
-    use otap_df_engine::control::{PipelineCompletionMsg, runtime_ctrl_msg_channel};
-    use otap_df_engine::shared::message::SharedSender;
-    use otap_df_engine::testing::exporter::TestRuntime;
-    use otap_df_engine::testing::node::test_node;
-    use otap_df_pdata::OtapArrowRecords;
-    use otap_df_pdata::OtlpProtoBytes;
-    use otap_df_pdata::otap::Logs;
-    use otap_df_pdata::proto::OtlpProtoMessage;
-    use otap_df_pdata::proto::opentelemetry::arrow::v1::ArrowPayloadType;
-    use otap_df_pdata::proto::opentelemetry::logs::v1::{
+    use otel_arrow_dfe_config::PortName;
+    use otel_arrow_dfe_engine::Interests;
+    use otel_arrow_dfe_engine::context::ControllerContext;
+    use otel_arrow_dfe_engine::control::{PipelineCompletionMsg, runtime_ctrl_msg_channel};
+    use otel_arrow_dfe_engine::shared::message::SharedSender;
+    use otel_arrow_dfe_engine::testing::exporter::TestRuntime;
+    use otel_arrow_dfe_engine::testing::node::test_node;
+    use otel_arrow_dfe_pdata::OtapArrowRecords;
+    use otel_arrow_dfe_pdata::OtlpProtoBytes;
+    use otel_arrow_dfe_pdata::otap::Logs;
+    use otel_arrow_dfe_pdata::proto::OtlpProtoMessage;
+    use otel_arrow_dfe_pdata::proto::opentelemetry::arrow::v1::ArrowPayloadType;
+    use otel_arrow_dfe_pdata::proto::opentelemetry::logs::v1::{
         LogRecord, LogsData, ResourceLogs, ScopeLogs,
     };
-    use otap_df_pdata::proto::opentelemetry::metrics::v1::{
+    use otel_arrow_dfe_pdata::proto::opentelemetry::metrics::v1::{
         Metric, MetricsData, ResourceMetrics, ScopeMetrics,
     };
-    use otap_df_pdata::proto::opentelemetry::trace::v1::{ResourceSpans, TracesData};
-    use otap_df_pdata::testing::equiv::assert_equivalent;
-    use otap_df_pdata::testing::round_trip::otlp_to_otap;
-    use otap_df_telemetry::registry::TelemetryRegistryHandle;
-    use otap_df_telemetry::reporter::MetricsReporter;
+    use otel_arrow_dfe_pdata::proto::opentelemetry::trace::v1::{ResourceSpans, TracesData};
+    use otel_arrow_dfe_pdata::testing::equiv::assert_equivalent;
+    use otel_arrow_dfe_pdata::testing::round_trip::otlp_to_otap;
+    use otel_arrow_dfe_telemetry::registry::TelemetryRegistryHandle;
+    use otel_arrow_dfe_telemetry::reporter::MetricsReporter;
 
     use parking_lot::lock_api::Mutex;
     use prost::Message;
@@ -1064,18 +1064,18 @@ mod test {
     use tokio_util::task::TaskTracker;
 
     use {
-        otap_df_config::tls::{TlsClientConfig, TlsConfig, TlsServerConfig},
-        otap_test_tls_certs::{ExtendedKeyUsage, generate_ca},
+        otel_arrow_dfe_config::tls::{TlsClientConfig, TlsConfig, TlsServerConfig},
+        otel_arrow_dfe_test_tls_certs::{ExtendedKeyUsage, generate_ca},
         tempfile::TempDir,
     };
 
     use super::*;
 
-    use otap_df_otap::otap_grpc::common::AckRegistry;
-    use otap_df_otap::otlp_http::client_settings::HttpClientSettings;
-    use otap_df_otap::otlp_http::{HttpServerSettings, serve, tune_max_concurrent_requests};
-    use otap_df_otap::otlp_metrics::OtlpReceiverMetrics;
-    use otap_df_otap::testing::TestCallData;
+    use otel_arrow_dfe_otap::otap_grpc::common::AckRegistry;
+    use otel_arrow_dfe_otap::otlp_http::client_settings::HttpClientSettings;
+    use otel_arrow_dfe_otap::otlp_http::{HttpServerSettings, serve, tune_max_concurrent_requests};
+    use otel_arrow_dfe_otap::otlp_metrics::OtlpReceiverMetrics;
+    use otel_arrow_dfe_otap::testing::TestCallData;
 
     /// run test HTTP server serving OTLP HTTP API. Internally, this uses the OTLP HTTP server that
     /// is used in OTLP Receiver. This returns a cancellation token (to shutdown the server when
@@ -1094,7 +1094,7 @@ mod test {
         let (runtime_ctrl_msg_tx, _runtime_ctrl_msg_rx) = runtime_ctrl_msg_channel(10);
         let (_rx, metrics_reporter) = MetricsReporter::create_new_and_receiver(5);
         let server_effect_handler =
-            otap_df_engine::shared::receiver::EffectHandler::<OtapPdata>::new(
+            otel_arrow_dfe_engine::shared::receiver::EffectHandler::<OtapPdata>::new(
                 server_node_id,
                 msg_senders,
                 Some(port_name),
@@ -1119,7 +1119,7 @@ mod test {
                 server_settings,
                 ack_registry,
                 Arc::new(Mutex::new(server_metrics)),
-                otap_df_engine::memory_limiter::SharedReceiverAdmissionState::default(),
+                otel_arrow_dfe_engine::memory_limiter::SharedReceiverAdmissionState::default(),
                 None,
                 None,
                 server_cancellation_token,
@@ -1363,9 +1363,9 @@ mod test {
         // With a bearer token provider bound, a 401 from the backend (e.g. the
         // cached token lapsed) must be NACK'd as retryable, not permanently
         // dropped, so the batch can succeed once a fresh token is in use.
-        otap_df_otap::crypto::ensure_crypto_provider();
+        otel_arrow_dfe_otap::crypto::ensure_crypto_provider();
         let tokio_rt = Runtime::new().unwrap();
-        let port = otap_df_test_net::pick_unused_loopback_tcp_port();
+        let port = otel_arrow_dfe_test_net::pick_unused_loopback_tcp_port();
         let endpoint_addr = format!("127.0.0.1:{port}");
         let endpoint = format!("http://{endpoint_addr}");
 
@@ -1432,9 +1432,9 @@ mod test {
     // permission problem is not fixed by refreshing the token.
     #[test]
     fn test_forbidden_is_permanent_even_when_provider_bound() {
-        otap_df_otap::crypto::ensure_crypto_provider();
+        otel_arrow_dfe_otap::crypto::ensure_crypto_provider();
         let tokio_rt = Runtime::new().unwrap();
-        let port = otap_df_test_net::pick_unused_loopback_tcp_port();
+        let port = otel_arrow_dfe_test_net::pick_unused_loopback_tcp_port();
         let endpoint_addr = format!("127.0.0.1:{port}");
         let endpoint = format!("http://{endpoint_addr}");
 
@@ -1498,9 +1498,9 @@ mod test {
     fn test_configured_headers_sent_on_wire() {
         use std::collections::HashMap;
 
-        otap_df_otap::crypto::ensure_crypto_provider();
+        otel_arrow_dfe_otap::crypto::ensure_crypto_provider();
         let tokio_rt = Runtime::new().unwrap();
-        let port = otap_df_test_net::pick_unused_loopback_tcp_port();
+        let port = otel_arrow_dfe_test_net::pick_unused_loopback_tcp_port();
         let endpoint_addr = format!("127.0.0.1:{port}");
 
         let captured: Arc<parking_lot::Mutex<Option<HeaderMap>>> =
@@ -1581,23 +1581,25 @@ mod test {
         async fn get_token(
             &self,
         ) -> Result<
-            otap_df_engine::capability::auth::BearerToken,
-            otap_df_engine::capability::CapabilityError,
+            otel_arrow_dfe_engine::capability::auth::BearerToken,
+            otel_arrow_dfe_engine::capability::CapabilityError,
         > {
             // Not exercised by the exporter (it consumes `token_stream`); return
             // the first configured token for completeness.
-            Ok(otap_df_engine::capability::auth::BearerToken::with_expiry(
-                self.tokens.first().cloned().unwrap_or_default(),
-                None,
-            ))
+            Ok(
+                otel_arrow_dfe_engine::capability::auth::BearerToken::with_expiry(
+                    self.tokens.first().cloned().unwrap_or_default(),
+                    None,
+                ),
+            )
         }
 
         fn token_stream(
             &self,
-        ) -> otap_df_engine::capability::auth::bearer_token_provider::TokenStream {
+        ) -> otel_arrow_dfe_engine::capability::auth::bearer_token_provider::TokenStream {
             let expires_on = self.expires_on;
             let published = futures::stream::iter(self.tokens.clone().into_iter().map(move |t| {
-                otap_df_engine::capability::auth::BearerToken::with_expiry(t, expires_on)
+                otel_arrow_dfe_engine::capability::auth::BearerToken::with_expiry(t, expires_on)
             }));
             if self.keep_open {
                 published.chain(futures::stream::pending()).boxed()
@@ -1614,7 +1616,7 @@ mod test {
         config: Config,
         provider: MockTokenProvider,
     ) -> ExporterWrapper<OtapPdata> {
-        otap_df_otap::crypto::ensure_crypto_provider();
+        otel_arrow_dfe_otap::crypto::ensure_crypto_provider();
         let node_config = Arc::new(NodeUserConfig::new_exporter_config(OTLP_HTTP_EXPORTER_URN));
         let telemetry_registry_handle = test_runtime.metrics_registry();
         let controller_ctx = ControllerContext::new(telemetry_registry_handle.clone());
@@ -1644,9 +1646,9 @@ mod test {
         // `authorization` bearer token on the outbound request, and that the
         // token takes precedence over a statically configured `authorization`
         // header.
-        otap_df_otap::crypto::ensure_crypto_provider();
+        otel_arrow_dfe_otap::crypto::ensure_crypto_provider();
         let tokio_rt = Runtime::new().unwrap();
-        let port = otap_df_test_net::pick_unused_loopback_tcp_port();
+        let port = otel_arrow_dfe_test_net::pick_unused_loopback_tcp_port();
         let endpoint_addr = format!("127.0.0.1:{port}");
         let endpoint = format!("http://{endpoint_addr}");
 
@@ -1718,9 +1720,9 @@ mod test {
     fn test_bearer_token_unavailable_nacks_and_sends_nothing() {
         // Provider is bound but never publishes a token: batches must be NACK'd
         // as retryable and no request may reach the server.
-        otap_df_otap::crypto::ensure_crypto_provider();
+        otel_arrow_dfe_otap::crypto::ensure_crypto_provider();
         let tokio_rt = Runtime::new().unwrap();
-        let port = otap_df_test_net::pick_unused_loopback_tcp_port();
+        let port = otel_arrow_dfe_test_net::pick_unused_loopback_tcp_port();
         let endpoint_addr = format!("127.0.0.1:{port}");
         let endpoint = format!("http://{endpoint_addr}");
 
@@ -1803,9 +1805,9 @@ mod test {
         // expiry and keeps its stream open. The exporter must refuse to send it (a
         // request could outlive the token), NACK retryably (a refresh may still
         // arrive), and send nothing to the server.
-        otap_df_otap::crypto::ensure_crypto_provider();
+        otel_arrow_dfe_otap::crypto::ensure_crypto_provider();
         let tokio_rt = Runtime::new().unwrap();
-        let port = otap_df_test_net::pick_unused_loopback_tcp_port();
+        let port = otel_arrow_dfe_test_net::pick_unused_loopback_tcp_port();
         let endpoint_addr = format!("127.0.0.1:{port}");
         let endpoint = format!("http://{endpoint_addr}");
 
@@ -1889,9 +1891,9 @@ mod test {
         // A malformed token (header-invalid bytes) is dropped via the error arm
         // (incrementing `auth_token_errors`); the subsequent valid token is what
         // reaches the wire.
-        otap_df_otap::crypto::ensure_crypto_provider();
+        otel_arrow_dfe_otap::crypto::ensure_crypto_provider();
         let tokio_rt = Runtime::new().unwrap();
-        let port = otap_df_test_net::pick_unused_loopback_tcp_port();
+        let port = otel_arrow_dfe_test_net::pick_unused_loopback_tcp_port();
         let endpoint_addr = format!("127.0.0.1:{port}");
         let endpoint = format!("http://{endpoint_addr}");
 
@@ -1957,9 +1959,9 @@ mod test {
     fn test_last_token_reused_after_stream_closes() {
         // The provider publishes one token then closes its stream; subsequent
         // batches must keep using the cached token.
-        otap_df_otap::crypto::ensure_crypto_provider();
+        otel_arrow_dfe_otap::crypto::ensure_crypto_provider();
         let tokio_rt = Runtime::new().unwrap();
-        let port = otap_df_test_net::pick_unused_loopback_tcp_port();
+        let port = otel_arrow_dfe_test_net::pick_unused_loopback_tcp_port();
         let endpoint_addr = format!("127.0.0.1:{port}");
         let endpoint = format!("http://{endpoint_addr}");
 
@@ -2084,7 +2086,7 @@ mod test {
         let (runtime_ctrl_msg_tx, _runtime_ctrl_msg_rx) = runtime_ctrl_msg_channel(10);
         let (_rx, metrics_reporter) = MetricsReporter::create_new_and_receiver(5);
         let server_effect_handler =
-            otap_df_engine::shared::receiver::EffectHandler::<OtapPdata>::new(
+            otel_arrow_dfe_engine::shared::receiver::EffectHandler::<OtapPdata>::new(
                 server_node_id,
                 msg_senders,
                 Some(port_name),
@@ -2110,7 +2112,7 @@ mod test {
                 server_settings,
                 ack_registry,
                 Arc::new(Mutex::new(server_metrics)),
-                otap_df_engine::memory_limiter::SharedReceiverAdmissionState::default(),
+                otel_arrow_dfe_engine::memory_limiter::SharedReceiverAdmissionState::default(),
                 None,
                 None,
                 server_cancellation_token,
@@ -2130,7 +2132,7 @@ mod test {
         test_runtime: &TestRuntime<OtapPdata>,
         config: Config,
     ) -> (PipelineContext, ExporterWrapper<OtapPdata>) {
-        otap_df_otap::crypto::ensure_crypto_provider();
+        otel_arrow_dfe_otap::crypto::ensure_crypto_provider();
         let node_config = Arc::new(NodeUserConfig::new_exporter_config(OTLP_HTTP_EXPORTER_URN));
         let telemetry_registry_handle = test_runtime.metrics_registry();
         let controller_ctx = ControllerContext::new(telemetry_registry_handle.clone());
@@ -2181,13 +2183,17 @@ mod test {
         }]);
 
         let traces_batch = TracesData::new(vec![ResourceSpans {
-            scope_spans: vec![otap_df_pdata::proto::opentelemetry::trace::v1::ScopeSpans {
-                spans: vec![otap_df_pdata::proto::opentelemetry::trace::v1::Span {
-                    name: "span".into(),
+            scope_spans: vec![
+                otel_arrow_dfe_pdata::proto::opentelemetry::trace::v1::ScopeSpans {
+                    spans: vec![
+                        otel_arrow_dfe_pdata::proto::opentelemetry::trace::v1::Span {
+                            name: "span".into(),
+                            ..Default::default()
+                        },
+                    ],
                     ..Default::default()
-                }],
-                ..Default::default()
-            }],
+                },
+            ],
             ..Default::default()
         }]);
 
@@ -2301,7 +2307,7 @@ mod test {
 
     #[test]
     fn test_exports_otlp_signals() {
-        let port = otap_df_test_net::pick_unused_loopback_tcp_port();
+        let port = otel_arrow_dfe_test_net::pick_unused_loopback_tcp_port();
         let endpoint_addr = format!("127.0.0.1:{}", port);
         let endpoint = format!("http://{endpoint_addr}");
 
@@ -2425,7 +2431,7 @@ mod test {
     }
 
     fn run_error_status_code_test(status: u16, retryable: bool) {
-        let port = otap_df_test_net::pick_unused_loopback_tcp_port();
+        let port = otel_arrow_dfe_test_net::pick_unused_loopback_tcp_port();
         let endpoint_addr = format!("127.0.0.1:{}", port);
         let endpoint = format!("http://{endpoint_addr}");
 
@@ -2568,7 +2574,7 @@ mod test {
 
     #[test]
     fn test_handles_connection_refused_errors() {
-        let port = otap_df_test_net::pick_unused_loopback_tcp_port();
+        let port = otel_arrow_dfe_test_net::pick_unused_loopback_tcp_port();
         let endpoint_addr = format!("127.0.0.1:{}", port);
         let endpoint = format!("http://{endpoint_addr}");
 
@@ -2645,7 +2651,7 @@ mod test {
 
     #[test]
     fn test_handles_partial_success() {
-        let port = otap_df_test_net::pick_unused_loopback_tcp_port();
+        let port = otel_arrow_dfe_test_net::pick_unused_loopback_tcp_port();
         let endpoint_addr = format!("127.0.0.1:{}", port);
         let endpoint = format!("http://{endpoint_addr}");
 
@@ -2741,7 +2747,7 @@ mod test {
 
     #[test]
     fn test_handles_response_body_too_large() {
-        let port = otap_df_test_net::pick_unused_loopback_tcp_port();
+        let port = otel_arrow_dfe_test_net::pick_unused_loopback_tcp_port();
         let endpoint_addr = format!("127.0.0.1:{}", port);
         let endpoint = format!("http://{endpoint_addr}");
 
@@ -2854,7 +2860,7 @@ mod test {
 
     #[test]
     fn test_nacks_for_otap_payloads_when_context_indicates_no_payload_return() {
-        let port = otap_df_test_net::pick_unused_loopback_tcp_port();
+        let port = otel_arrow_dfe_test_net::pick_unused_loopback_tcp_port();
         let endpoint_addr = format!("127.0.0.1:{}", port);
         let endpoint = format!("http://{endpoint_addr}");
 
@@ -2938,7 +2944,7 @@ mod test {
 
     #[test]
     fn test_nacks_for_otlp_payloads_when_context_indicates_no_payload_return() {
-        let port = otap_df_test_net::pick_unused_loopback_tcp_port();
+        let port = otel_arrow_dfe_test_net::pick_unused_loopback_tcp_port();
         let endpoint_addr = format!("127.0.0.1:{}", port);
         let endpoint = format!("http://{endpoint_addr}");
 
@@ -3024,7 +3030,7 @@ mod test {
 
     #[test]
     fn test_export_otap_signals() {
-        let port = otap_df_test_net::pick_unused_loopback_tcp_port();
+        let port = otel_arrow_dfe_test_net::pick_unused_loopback_tcp_port();
         let endpoint_addr = format!("127.0.0.1:{}", port);
         let endpoint = format!("http://{endpoint_addr}");
 
@@ -3139,15 +3145,15 @@ mod test {
 
     #[test]
     pub fn test_uses_endpoint_overrides_if_provided() {
-        let logs_port = otap_df_test_net::pick_unused_loopback_tcp_port();
+        let logs_port = otel_arrow_dfe_test_net::pick_unused_loopback_tcp_port();
         let logs_endpoint_addr = format!("127.0.0.1:{}", logs_port);
         let logs_endpoint = format!("http://{logs_endpoint_addr}/v1/logs");
 
-        let metrics_port = otap_df_test_net::pick_unused_loopback_tcp_port();
+        let metrics_port = otel_arrow_dfe_test_net::pick_unused_loopback_tcp_port();
         let metrics_endpoint_addr = format!("127.0.0.1:{}", metrics_port);
         let metrics_endpoint = format!("http://{metrics_endpoint_addr}/v1/metrics");
 
-        let traces_port = otap_df_test_net::pick_unused_loopback_tcp_port();
+        let traces_port = otel_arrow_dfe_test_net::pick_unused_loopback_tcp_port();
         let traces_endpoint_addr = format!("127.0.0.1:{}", traces_port);
         let traces_endpoint = format!("http://{traces_endpoint_addr}/v1/traces");
 
@@ -3240,7 +3246,7 @@ mod test {
         client_tls_config: TlsClientConfig,
         server_tls_config: TlsServerConfig,
     ) {
-        let port = otap_df_test_net::pick_unused_loopback_tcp_port();
+        let port = otel_arrow_dfe_test_net::pick_unused_loopback_tcp_port();
         let endpoint_addr = format!("127.0.0.1:{}", port);
         let endpoint = format!("https://localhost:{port}");
 
@@ -3344,7 +3350,7 @@ mod test {
         expected_err_content: &'static str,
         expect_permanent_nack: bool,
     ) {
-        let port = otap_df_test_net::pick_unused_loopback_tcp_port();
+        let port = otel_arrow_dfe_test_net::pick_unused_loopback_tcp_port();
         let endpoint_addr = format!("127.0.0.1:{}", port);
         let endpoint = format!("https://localhost:{port}");
 
@@ -3462,7 +3468,7 @@ mod test {
 
     #[test]
     fn test_tls_server_only_ca_pem_from_str() {
-        otap_df_otap::crypto::ensure_crypto_provider();
+        otel_arrow_dfe_otap::crypto::ensure_crypto_provider();
 
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let path = temp_dir.path();
@@ -3509,7 +3515,7 @@ mod test {
 
     #[test]
     fn test_tls_server_only_ca_pem_from_file() {
-        otap_df_otap::crypto::ensure_crypto_provider();
+        otel_arrow_dfe_otap::crypto::ensure_crypto_provider();
 
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let path = temp_dir.path();
@@ -3557,7 +3563,7 @@ mod test {
 
     #[test]
     fn test_tls_server_insecure_skip_verify_true() {
-        otap_df_otap::crypto::ensure_crypto_provider();
+        otel_arrow_dfe_otap::crypto::ensure_crypto_provider();
 
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let path = temp_dir.path();
@@ -3605,7 +3611,7 @@ mod test {
 
     #[test]
     fn test_tls_server_failure_no_ca_configured() {
-        otap_df_otap::crypto::ensure_crypto_provider();
+        otel_arrow_dfe_otap::crypto::ensure_crypto_provider();
 
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let path = temp_dir.path();
@@ -3655,7 +3661,7 @@ mod test {
 
     #[test]
     fn test_tls_server_failure_invalid_ca_configured() {
-        otap_df_otap::crypto::ensure_crypto_provider();
+        otel_arrow_dfe_otap::crypto::ensure_crypto_provider();
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let path = temp_dir.path();
         let ca = generate_ca("Test CA");
@@ -3705,7 +3711,7 @@ mod test {
 
     #[test]
     fn test_tls_server_failure_server_name_mismatch() {
-        otap_df_otap::crypto::ensure_crypto_provider();
+        otel_arrow_dfe_otap::crypto::ensure_crypto_provider();
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let path = temp_dir.path();
         let ca = generate_ca("Test CA");
@@ -3753,7 +3759,7 @@ mod test {
 
     #[test]
     fn test_tls_mtls_success_cert_pem() {
-        otap_df_otap::crypto::ensure_crypto_provider();
+        otel_arrow_dfe_otap::crypto::ensure_crypto_provider();
 
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let path = temp_dir.path();
@@ -3805,7 +3811,7 @@ mod test {
 
     #[test]
     fn test_tls_mtls_success_cert_file() {
-        otap_df_otap::crypto::ensure_crypto_provider();
+        otel_arrow_dfe_otap::crypto::ensure_crypto_provider();
 
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let path = temp_dir.path();
@@ -3858,7 +3864,7 @@ mod test {
 
     #[test]
     fn test_tls_mtls_failure_wrong_client_cert() {
-        otap_df_otap::crypto::ensure_crypto_provider();
+        otel_arrow_dfe_otap::crypto::ensure_crypto_provider();
 
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let path = temp_dir.path();
@@ -3919,7 +3925,7 @@ mod test {
 
     #[test]
     fn test_start_returns_error_if_mtls_cert_without_key() {
-        otap_df_otap::crypto::ensure_crypto_provider();
+        otel_arrow_dfe_otap::crypto::ensure_crypto_provider();
 
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let path = temp_dir.path();
@@ -3928,7 +3934,7 @@ mod test {
         let client = ca.issue_leaf("Test Client", None, Some(ExtendedKeyUsage::ClientAuth));
         client.write_to_dir(path, "client");
 
-        let port = otap_df_test_net::pick_unused_loopback_tcp_port();
+        let port = otel_arrow_dfe_test_net::pick_unused_loopback_tcp_port();
         let endpoint = format!("https://localhost:{port}");
 
         let config = Config {
@@ -3974,7 +3980,7 @@ mod test {
 
     #[test]
     fn test_start_returns_error_if_mtls_key_without_cert() {
-        otap_df_otap::crypto::ensure_crypto_provider();
+        otel_arrow_dfe_otap::crypto::ensure_crypto_provider();
 
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let path = temp_dir.path();
@@ -3983,7 +3989,7 @@ mod test {
         let client = ca.issue_leaf("Test Client", None, Some(ExtendedKeyUsage::ClientAuth));
         client.write_to_dir(path, "client");
 
-        let port = otap_df_test_net::pick_unused_loopback_tcp_port();
+        let port = otel_arrow_dfe_test_net::pick_unused_loopback_tcp_port();
         let endpoint = format!("https://localhost:{port}");
 
         let config = Config {
@@ -4063,10 +4069,10 @@ mod test {
     }
 
     fn run_compression_round_trip(
-        compression: Option<otap_df_otap::compression::CompressionMethod>,
+        compression: Option<otel_arrow_dfe_otap::compression::CompressionMethod>,
         expected_encoding: Option<&'static str>,
     ) {
-        let port = otap_df_test_net::pick_unused_loopback_tcp_port();
+        let port = otel_arrow_dfe_test_net::pick_unused_loopback_tcp_port();
         let endpoint_addr = format!("127.0.0.1:{port}");
         let endpoint = format!("http://{endpoint_addr}");
 
@@ -4168,7 +4174,7 @@ mod test {
                         "unexpected content-encoding header"
                     );
                     let decoded = decode_with(captured.content_encoding.as_deref(), &captured.body);
-                    let decoded_req = otap_df_pdata::proto::opentelemetry::collector::logs::v1::ExportLogsServiceRequest::decode(decoded.as_slice())
+                    let decoded_req = otel_arrow_dfe_pdata::proto::opentelemetry::collector::logs::v1::ExportLogsServiceRequest::decode(decoded.as_slice())
                         .expect("body did not decode as ExportLogsServiceRequest");
                     let received_logs = LogsData {
                         resource_logs: decoded_req.resource_logs,
@@ -4186,7 +4192,7 @@ mod test {
     #[test]
     fn test_export_with_gzip_compression() {
         run_compression_round_trip(
-            Some(otap_df_otap::compression::CompressionMethod::Gzip),
+            Some(otel_arrow_dfe_otap::compression::CompressionMethod::Gzip),
             Some("gzip"),
         );
     }
@@ -4194,7 +4200,7 @@ mod test {
     #[test]
     fn test_export_with_zstd_compression() {
         run_compression_round_trip(
-            Some(otap_df_otap::compression::CompressionMethod::Zstd),
+            Some(otel_arrow_dfe_otap::compression::CompressionMethod::Zstd),
             Some("zstd"),
         );
     }
@@ -4202,7 +4208,7 @@ mod test {
     #[test]
     fn test_export_with_deflate_compression() {
         run_compression_round_trip(
-            Some(otap_df_otap::compression::CompressionMethod::Deflate),
+            Some(otel_arrow_dfe_otap::compression::CompressionMethod::Deflate),
             Some("deflate"),
         );
     }

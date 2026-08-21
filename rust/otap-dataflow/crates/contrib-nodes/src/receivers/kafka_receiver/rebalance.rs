@@ -49,7 +49,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 #[cfg(feature = "aws")]
 use crate::common::kafka::aws::AwsMskAuthClientContext;
-use otap_df_telemetry::{otel_error, otel_info, otel_warn};
+use otel_arrow_dfe_telemetry::{otel_error, otel_info, otel_warn};
 use rdkafka::ClientContext;
 use rdkafka::client::OAuthToken;
 use rdkafka::consumer::{BaseConsumer, CommitMode, Consumer, ConsumerContext, Rebalance};
@@ -198,7 +198,7 @@ pub(crate) struct RebalanceState {
 }
 
 /// A batch of rebalance counter deltas drained by the receive loop and folded
-/// into the receiver's [`MetricSet`](otap_df_telemetry::metrics::MetricSet).
+/// into the receiver's [`MetricSet`](otel_arrow_dfe_telemetry::metrics::MetricSet).
 #[derive(Debug, Default, Clone, Copy)]
 pub(crate) struct RebalanceMetricsDelta {
     /// Rebalance (assign) events since the last drain.

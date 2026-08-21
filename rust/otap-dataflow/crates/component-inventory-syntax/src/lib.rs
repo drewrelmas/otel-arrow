@@ -35,7 +35,7 @@ use syn::{
 /// depends only on `syn`/`proc-macro2`) so that all three consumers reference
 /// the same type and cannot drift:
 ///
-/// - `otel-arrow-dfe-engine` re-exports it as `otap_df_engine::inventory::Category`,
+/// - `otel-arrow-dfe-engine` re-exports it as `otel_arrow_dfe_engine::inventory::Category`,
 ///   the runtime type stored in every `ComponentMeta`;
 /// - the `#[component_inventory]` proc macro validates the `category = <Ident>`
 ///   argument and emits `Category::<Variant>` referencing that re-export; and

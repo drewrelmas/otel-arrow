@@ -28,7 +28,7 @@ groups:
             type: urn:otel:receiver:user_events
             config:
               subscriptions:
-                - tracepoint: "otap_df_eventheader_demo_L4K1"
+                - tracepoint: "otel_arrow_dfe_eventheader_demo_L4K1"
                   format:
                     type: event_header
               session:

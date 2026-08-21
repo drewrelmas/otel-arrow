@@ -74,8 +74,8 @@ and a URN in its `name` field. To make it show up in the inventory, add one
 attribute:
 
 ```rust
-use otap_df_engine_macros::component_inventory;
-use otap_df_engine::inventory::Category;
+use otel_arrow_dfe_engine_macros::component_inventory;
+use otel_arrow_dfe_engine::inventory::Category;
 
 #[component_inventory(
     category = Receiver,
@@ -229,7 +229,7 @@ pub struct ComponentMeta {
 ### Collection mechanism
 
 ```rust
-// otap_df_engine::inventory
+// otel_arrow_dfe_engine::inventory
 #[doc(hidden)]
 #[allow(unsafe_code)]
 #[linkme::distributed_slice]
@@ -241,12 +241,12 @@ unchanged:
 
 ```rust
 #[allow(unsafe_code)]
-#[::linkme::distributed_slice(::otap_df_engine::inventory::COMPONENT_INVENTORY)]
+#[::linkme::distributed_slice(::otel_arrow_dfe_engine::inventory::COMPONENT_INVENTORY)]
 #[linkme(crate = ::linkme)]
-static _COMPONENT_META_OTLP_RECEIVER: ::otap_df_engine::inventory::ComponentMeta =
-    ::otap_df_engine::inventory::ComponentMeta {
+static _COMPONENT_META_OTLP_RECEIVER: ::otel_arrow_dfe_engine::inventory::ComponentMeta =
+    ::otel_arrow_dfe_engine::inventory::ComponentMeta {
         id: OTLP_RECEIVER_URN,             // read from the factory `name`
-        category: ::otap_df_engine::inventory::Category::Receiver,
+        category: ::otel_arrow_dfe_engine::inventory::Category::Receiver,
         description: Some("OTLP unary gRPC receiver on port 4317"),
         file: file!(),
         line: line!(),

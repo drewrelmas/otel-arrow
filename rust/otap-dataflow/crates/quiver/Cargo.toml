@@ -12,7 +12,7 @@ keywords = ["opentelemetry", "arrow", "persistence", "quiver"]
 categories = ["database", "data-structures"]
 
 [lib]
-name = "quiver"
+name = "otel_arrow_dfe_quiver"
 path = "src/lib.rs"
 
 [features]

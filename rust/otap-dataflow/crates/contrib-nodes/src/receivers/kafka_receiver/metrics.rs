@@ -3,8 +3,8 @@
 
 //! Metrics for the Kafka Receiver node.
 
-use otap_df_telemetry::instrument::{Counter, Gauge};
-use otap_df_telemetry_macros::metric_set;
+use otel_arrow_dfe_telemetry::instrument::{Counter, Gauge};
+use otel_arrow_dfe_telemetry_macros::metric_set;
 
 /// Metrics for the Kafka Receiver.
 #[metric_set(name = "receiver.kafka")]

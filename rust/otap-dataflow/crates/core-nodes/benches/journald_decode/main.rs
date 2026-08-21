@@ -34,7 +34,7 @@
 use std::hint::black_box;
 
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use otap_df_core_nodes::receivers::journald_receiver::bench_reference_decode;
+use otel_arrow_dfe_core_nodes::receivers::journald_receiver::bench_reference_decode;
 
 /// A realistic entry: the metadata journald always attaches plus one `MESSAGE`
 /// whose size is the workload variable.

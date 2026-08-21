@@ -44,56 +44,56 @@
 use crate::error::Error;
 use crate::thread_task::{ThreadLocalTaskHandle, spawn_thread_local_task};
 use core_affinity::CoreId;
-use otap_df_admin::ControlPlane;
-use otap_df_config::engine::{
+use otel_arrow_dfe_admin::ControlPlane;
+use otel_arrow_dfe_config::engine::{
     OtelDataflowSpec, ResolvedPipelineConfig, ResolvedPipelineRole,
     SYSTEM_OBSERVABILITY_PIPELINE_ID, SYSTEM_PIPELINE_GROUP_ID,
 };
-use otap_df_config::extension::{ExtensionUrn, ExtensionUserConfig};
-use otap_df_config::node::{NodeKind, NodeUserConfig};
-use otap_df_config::pipeline::telemetry::AttributeValue;
-use otap_df_config::pipeline_group::PipelineGroupConfig;
-use otap_df_config::policy::MemoryLimiterMode;
-use otap_df_config::policy::{
+use otel_arrow_dfe_config::extension::{ExtensionUrn, ExtensionUserConfig};
+use otel_arrow_dfe_config::node::{NodeKind, NodeUserConfig};
+use otel_arrow_dfe_config::pipeline::telemetry::AttributeValue;
+use otel_arrow_dfe_config::pipeline_group::PipelineGroupConfig;
+use otel_arrow_dfe_config::policy::MemoryLimiterMode;
+use otel_arrow_dfe_config::policy::{
     ChannelCapacityPolicy, CoreAllocation, CoreAllocationStrategy, RateLimiterPolicy,
     RuntimeRecoveryPolicy, TelemetryPolicy,
 };
-use otap_df_config::topic::{
+use otel_arrow_dfe_config::topic::{
     TopicAckPropagationMode, TopicBackendKind, TopicBroadcastAckMode, TopicBroadcastOnLagPolicy,
     TopicImplSelectionPolicy, TopicSpec,
 };
-use otap_df_config::transport_headers_policy::TransportHeadersPolicy;
-use otap_df_config::{
+use otel_arrow_dfe_config::transport_headers_policy::TransportHeadersPolicy;
+use otel_arrow_dfe_config::{
     DeployedPipelineKey, ExtensionId, PipelineGroupId, PipelineId, PipelineKey,
     SubscriptionGroupName, TopicName, pipeline::PipelineConfig,
 };
-use otap_df_engine::PipelineFactory;
-use otap_df_engine::ReceivedAtNode;
-use otap_df_engine::Unwindable;
-use otap_df_engine::context::{ControllerContext, PipelineContext};
-use otap_df_engine::control::{
+use otel_arrow_dfe_engine::PipelineFactory;
+use otel_arrow_dfe_engine::ReceivedAtNode;
+use otel_arrow_dfe_engine::Unwindable;
+use otel_arrow_dfe_engine::context::{ControllerContext, PipelineContext};
+use otel_arrow_dfe_engine::control::{
     PipelineAdminSender, PipelineCompletionMsgReceiver, PipelineCompletionMsgSender,
     RuntimeCtrlMsgReceiver, RuntimeCtrlMsgSender, pipeline_completion_msg_channel,
     runtime_ctrl_msg_channel,
 };
-use otap_df_engine::entity_context::{
+use otel_arrow_dfe_engine::entity_context::{
     node_entity_key, pipeline_entity_key, set_pipeline_entity_key,
 };
-use otap_df_engine::error::Error as EngineError;
-use otap_df_engine::memory_limiter::{
+use otel_arrow_dfe_engine::error::Error as EngineError;
+use otel_arrow_dfe_engine::memory_limiter::{
     EffectiveMemoryLimiter, MemoryLimiterTick, MemoryPressureBehaviorConfig, MemoryPressureChanged,
     MemoryPressureLevel,
 };
-use otap_df_engine::processor::FlowMetricHook;
-use otap_df_engine::topic::{
+use otel_arrow_dfe_engine::processor::FlowMetricHook;
+use otel_arrow_dfe_engine::topic::{
     InMemoryBackend, PipelineTopicBinding, TopicBroker, TopicOptions, TopicPublishOutcomeConfig,
     TopicSet,
 };
-use otap_df_state::store::{ObservedStateHandle, ObservedStateStore};
-use otap_df_telemetry::event::{EngineEvent, ErrorSummary, ObservedEventReporter};
-use otap_df_telemetry::registry::TelemetryRegistryHandle;
-use otap_df_telemetry::reporter::MetricsReporter;
-use otap_df_telemetry::{
+use otel_arrow_dfe_state::store::{ObservedStateHandle, ObservedStateStore};
+use otel_arrow_dfe_telemetry::event::{EngineEvent, ErrorSummary, ObservedEventReporter};
+use otel_arrow_dfe_telemetry::registry::TelemetryRegistryHandle;
+use otel_arrow_dfe_telemetry::reporter::MetricsReporter;
+use otel_arrow_dfe_telemetry::{
     InternalTelemetrySettings, InternalTelemetrySystem, TracingSetup,
     log_filter::RuntimeLogFilterHandle, otel_error, otel_info, otel_info_span, otel_warn,
     resource_detectors, self_tracing::LogContext,
@@ -135,7 +135,7 @@ use live_control::{
     RuntimeInstanceExit,
 };
 
-use otap_df_engine::component_inventory;
+use otel_arrow_dfe_engine::component_inventory;
 
 /// Controller for managing pipelines in a thread-per-core model.
 ///
@@ -172,7 +172,7 @@ pub type ControllerExtensionTaskFactory =
 
 /// Static validator for controller extension user configuration.
 pub type ControllerExtensionValidateFn =
-    fn(config: &serde_json::Value) -> Result<(), otap_df_config::error::Error>;
+    fn(config: &serde_json::Value) -> Result<(), otel_arrow_dfe_config::error::Error>;
 
 type ControllerExtensionStartFn = dyn Fn(
         ControllerExtensionContext,
@@ -470,7 +470,7 @@ enum TopicWiringVertex {
     PipelineNode {
         pipeline_group_id: PipelineGroupId,
         pipeline_id: PipelineId,
-        node_id: otap_df_config::NodeId,
+        node_id: otel_arrow_dfe_config::NodeId,
     },
     Topic {
         declared_name: TopicName,
@@ -1035,7 +1035,7 @@ impl<
     fn validate_topic_runtime_support_with_capabilities(
         topic: &TopicName,
         backend: TopicBackendKind,
-        policies: &otap_df_config::topic::TopicPolicies,
+        policies: &otel_arrow_dfe_config::topic::TopicPolicies,
         selected_mode: InferredTopicMode,
         capabilities: TopicBackendCapabilities,
     ) -> Result<(), Error> {
@@ -1266,7 +1266,7 @@ impl<
         options: ControllerRunOptions,
     ) -> Result<(), Error> {
         engine_config.validate().map_err(|error| match error {
-            otap_df_config::error::Error::InvalidConfiguration { errors } => {
+            otel_arrow_dfe_config::error::Error::InvalidConfiguration { errors } => {
                 Error::InvalidConfiguration { errors }
             }
             other => Error::InvalidConfiguration {
@@ -1297,7 +1297,7 @@ impl<
         // config > detectors > build-info defaults.
         let detected = resource_detectors::detect(&engine.telemetry.detectors).map_err(|e| {
             Error::InvalidConfiguration {
-                errors: vec![otap_df_config::error::Error::InvalidUserConfig {
+                errors: vec![otel_arrow_dfe_config::error::Error::InvalidUserConfig {
                     error: format!("engine.telemetry.detectors: {e}"),
                 }],
             }
@@ -1328,7 +1328,7 @@ impl<
             .logs
             .tap
             .enabled
-            .then(|| otap_df_telemetry::log_tap::build(&telemetry_config.logs.tap));
+            .then(|| otel_arrow_dfe_telemetry::log_tap::build(&telemetry_config.logs.tap));
 
         // Create the observed state store for the telemetry system.
         let obs_state_store = ObservedStateStore::new_with_log_tap(
@@ -1425,7 +1425,7 @@ impl<
                     loop {
                         tokio::select! {
                             _ = cancellation_token.cancelled() => {
-                                return Ok::<(), otap_df_telemetry::error::Error>(());
+                                return Ok::<(), otel_arrow_dfe_telemetry::error::Error>(());
                             }
                             _ = ticker.tick() => {
                                 match limiter.tick(&limiter_state) {
@@ -1529,7 +1529,7 @@ impl<
             },
         )?;
         collector_ready_rx.recv().map_err(|_| {
-            Error::from(otap_df_telemetry::error::Error::MetricsCollectorNotRunning)
+            Error::from(otel_arrow_dfe_telemetry::error::Error::MetricsCollectorNotRunning)
         })?;
 
         // Pipeline threads receive only a Weak handle back to the controller runtime. That lets
@@ -1576,7 +1576,7 @@ impl<
             "engine-metrics",
             admin_tracing_setup.clone(),
             move |cancellation_token| async move {
-                use otap_df_engine::engine_metrics::EngineMetricsMonitor;
+                use otel_arrow_dfe_engine::engine_metrics::EngineMetricsMonitor;
                 use std::time::{Duration, Instant};
                 use tokio::time::{MissedTickBehavior, interval};
 
@@ -1603,7 +1603,7 @@ impl<
                                     error = err.to_string()
                                 );
                             }
-                            return Ok::<(), otap_df_telemetry::error::Error>(());
+                            return Ok::<(), otel_arrow_dfe_telemetry::error::Error>(());
                         }
                         _ = ticker.tick() => {
                             monitor.update();
@@ -1721,7 +1721,7 @@ impl<
             "http-admin",
             admin_tracing_setup,
             move |cancellation_token| {
-                otap_df_admin::run(
+                otel_arrow_dfe_admin::run(
                     admin_settings,
                     obs_state_handle,
                     admin_control_plane,
@@ -2133,7 +2133,7 @@ impl<
         telemetry_policy: TelemetryPolicy,
         transport_headers_policy: Option<TransportHeadersPolicy>,
         rate_limiter_policies: BTreeMap<String, RateLimiterPolicy>,
-        rate_limiter_scope: Option<otap_df_config::policy::RateLimiterDeclarationScope>,
+        rate_limiter_scope: Option<otel_arrow_dfe_config::policy::RateLimiterDeclarationScope>,
         controller_ctx: ControllerContext,
         metrics_reporter: MetricsReporter,
         engine_evt_reporter: ObservedEventReporter,
@@ -2330,7 +2330,7 @@ impl<
         telemetry_policy: TelemetryPolicy,
         transport_headers_policy: Option<TransportHeadersPolicy>,
         rate_limiter_policies: BTreeMap<String, RateLimiterPolicy>,
-        rate_limiter_scope: Option<otap_df_config::policy::RateLimiterDeclarationScope>,
+        rate_limiter_scope: Option<otel_arrow_dfe_config::policy::RateLimiterDeclarationScope>,
         telemetry_reporting_interval: Duration,
         pipeline_factory: &'static PipelineFactory<PData>,
         pipeline_context: PipelineContext,
@@ -2454,8 +2454,8 @@ impl<
 mod tests {
     use super::*;
     use async_trait::async_trait;
-    use otap_df_config::engine::{ResolvedPipelineConfig, ResolvedPipelineRole};
-    use otap_df_config::node::NodeUserConfig;
+    use otel_arrow_dfe_config::engine::{ResolvedPipelineConfig, ResolvedPipelineRole};
+    use otel_arrow_dfe_config::node::NodeUserConfig;
     /// Scenario: `BuildInfo::seed_attrs` runs with a mix of set, empty, and absent fields.
     /// Guarantees: it yields typed pairs for non-empty values only, skipping empty and `None`.
     #[test]
@@ -2543,19 +2543,19 @@ mod tests {
         );
     }
 
-    use otap_df_config::policy::{CoreRange, ResolvedPolicies, ResolvedResourcesPolicy};
-    use otap_df_config::topic::{TopicAckPropagationMode, TopicBroadcastOnLagPolicy};
-    use otap_df_engine::config::{ExporterConfig, ProcessorConfig, ReceiverConfig};
-    use otap_df_engine::control::NodeControlMsg;
-    use otap_df_engine::exporter::ExporterWrapper;
-    use otap_df_engine::local::{exporter, processor, receiver};
-    use otap_df_engine::message::{ExporterInbox, Message};
-    use otap_df_engine::processor::ProcessorWrapper;
-    use otap_df_engine::receiver::ReceiverWrapper;
-    use otap_df_engine::terminal_state::TerminalState;
-    use otap_df_engine::wiring_contract::WiringContract;
-    use otap_df_engine::{ExporterFactory, ProcessorFactory, ReceiverFactory};
-    use otap_df_telemetry::metrics::MetricSetSnapshot;
+    use otel_arrow_dfe_config::policy::{CoreRange, ResolvedPolicies, ResolvedResourcesPolicy};
+    use otel_arrow_dfe_config::topic::{TopicAckPropagationMode, TopicBroadcastOnLagPolicy};
+    use otel_arrow_dfe_engine::config::{ExporterConfig, ProcessorConfig, ReceiverConfig};
+    use otel_arrow_dfe_engine::control::NodeControlMsg;
+    use otel_arrow_dfe_engine::exporter::ExporterWrapper;
+    use otel_arrow_dfe_engine::local::{exporter, processor, receiver};
+    use otel_arrow_dfe_engine::message::{ExporterInbox, Message};
+    use otel_arrow_dfe_engine::processor::ProcessorWrapper;
+    use otel_arrow_dfe_engine::receiver::ReceiverWrapper;
+    use otel_arrow_dfe_engine::terminal_state::TerminalState;
+    use otel_arrow_dfe_engine::wiring_contract::WiringContract;
+    use otel_arrow_dfe_engine::{ExporterFactory, ProcessorFactory, ReceiverFactory};
+    use otel_arrow_dfe_telemetry::metrics::MetricSetSnapshot;
 
     fn available_core_ids() -> Vec<CoreId> {
         vec![
@@ -2602,7 +2602,7 @@ connections:
             self: Box<Self>,
             mut ctrl_chan: receiver::ControlChannel<()>,
             effect_handler: receiver::EffectHandler<()>,
-        ) -> Result<TerminalState, otap_df_engine::error::Error> {
+        ) -> Result<TerminalState, otel_arrow_dfe_engine::error::Error> {
             loop {
                 let msg = ctrl_chan.recv().await?;
                 match msg {
@@ -2627,7 +2627,7 @@ connections:
             &mut self,
             _msg: Message<()>,
             _effect_handler: &mut processor::EffectHandler<()>,
-        ) -> Result<(), otap_df_engine::error::Error> {
+        ) -> Result<(), otel_arrow_dfe_engine::error::Error> {
             Ok(())
         }
     }
@@ -2640,7 +2640,7 @@ connections:
             self: Box<Self>,
             mut inbox: ExporterInbox<()>,
             _effect_handler: exporter::EffectHandler<()>,
-        ) -> Result<TerminalState, otap_df_engine::error::Error> {
+        ) -> Result<TerminalState, otel_arrow_dfe_engine::error::Error> {
             loop {
                 if let Message::Control(NodeControlMsg::Shutdown { deadline, .. }) =
                     inbox.recv().await?
@@ -2653,11 +2653,11 @@ connections:
 
     fn create_test_observability_receiver(
         _pipeline_ctx: PipelineContext,
-        node: otap_df_engine::node::NodeId,
+        node: otel_arrow_dfe_engine::node::NodeId,
         node_config: Arc<NodeUserConfig>,
         receiver_config: &ReceiverConfig,
-        _capabilities: &otap_df_engine::capability::registry::Capabilities,
-    ) -> Result<ReceiverWrapper<()>, otap_df_config::error::Error> {
+        _capabilities: &otel_arrow_dfe_engine::capability::registry::Capabilities,
+    ) -> Result<ReceiverWrapper<()>, otel_arrow_dfe_config::error::Error> {
         Ok(ReceiverWrapper::local(
             TestObservabilityReceiver,
             node,
@@ -2668,11 +2668,11 @@ connections:
 
     fn create_test_observability_processor(
         _pipeline_ctx: PipelineContext,
-        node: otap_df_engine::node::NodeId,
+        node: otel_arrow_dfe_engine::node::NodeId,
         node_config: Arc<NodeUserConfig>,
         processor_config: &ProcessorConfig,
-        _capabilities: &otap_df_engine::capability::registry::Capabilities,
-    ) -> Result<ProcessorWrapper<()>, otap_df_config::error::Error> {
+        _capabilities: &otel_arrow_dfe_engine::capability::registry::Capabilities,
+    ) -> Result<ProcessorWrapper<()>, otel_arrow_dfe_config::error::Error> {
         Ok(ProcessorWrapper::local(
             TestObservabilityProcessor,
             node,
@@ -2683,11 +2683,11 @@ connections:
 
     fn create_test_observability_exporter(
         _pipeline_ctx: PipelineContext,
-        node: otap_df_engine::node::NodeId,
+        node: otel_arrow_dfe_engine::node::NodeId,
         node_config: Arc<NodeUserConfig>,
         exporter_config: &ExporterConfig,
-        _capabilities: &otap_df_engine::capability::registry::Capabilities,
-    ) -> Result<ExporterWrapper<()>, otap_df_config::error::Error> {
+        _capabilities: &otel_arrow_dfe_engine::capability::registry::Capabilities,
+    ) -> Result<ExporterWrapper<()>, otel_arrow_dfe_config::error::Error> {
         Ok(ExporterWrapper::local(
             TestObservabilityExporter,
             node,
@@ -2744,13 +2744,13 @@ connections:
 
     fn validate_test_linked_controller_extension_config(
         config: &serde_json::Value,
-    ) -> Result<(), otap_df_config::error::Error> {
-        otap_df_config::validation::no_config(config)
+    ) -> Result<(), otel_arrow_dfe_config::error::Error> {
+        otel_arrow_dfe_config::validation::no_config(config)
     }
 
     fn accept_any_test_config(
         _config: &serde_json::Value,
-    ) -> Result<(), otap_df_config::error::Error> {
+    ) -> Result<(), otel_arrow_dfe_config::error::Error> {
         Ok(())
     }
 
@@ -2863,7 +2863,7 @@ groups: {{}}
     fn global_topic_handle(
         declared: &DeclaredTopics<()>,
         topic_name: &str,
-    ) -> otap_df_engine::topic::TopicHandle<()> {
+    ) -> otel_arrow_dfe_engine::topic::TopicHandle<()> {
         let declared_name = declared
             .global_names
             .get(topic_name)
@@ -2878,7 +2878,7 @@ groups: {{}}
         declared: &DeclaredTopics<()>,
         group_id: &str,
         topic_name: &str,
-    ) -> otap_df_engine::topic::TopicHandle<()> {
+    ) -> otel_arrow_dfe_engine::topic::TopicHandle<()> {
         let key = (
             PipelineGroupId::from(group_id.to_owned()),
             TopicName::parse(topic_name).expect("topic name must parse"),
@@ -2950,7 +2950,7 @@ groups: {{}}
         registry.register(
             extension_type.clone(),
             start_test_linked_controller_extension,
-            otap_df_config::validation::no_config,
+            otel_arrow_dfe_config::validation::no_config,
         );
         registry.register(
             extension_type.clone(),
@@ -2981,7 +2981,7 @@ groups: {{}}
                     .push(context.extension_id.to_string());
                 Ok(Box::new(|_cancellation_token| Box::pin(async { Ok(()) })))
             },
-            otap_df_config::validation::no_config,
+            otel_arrow_dfe_config::validation::no_config,
         );
 
         let controller = Controller::new(test_pipeline_factory());
@@ -3008,7 +3008,7 @@ groups: {{}}
     #[test]
     fn controller_run_validates_rate_limit_requires_memory_source() {
         let config: OtelDataflowSpec = serde_json::from_value(serde_json::json!({
-            "version": otap_df_config::engine::ENGINE_CONFIG_VERSION_V1,
+            "version": otel_arrow_dfe_config::engine::ENGINE_CONFIG_VERSION_V1,
             "policies": {
                 "resources": {
                     "rate_limiters": {
@@ -3169,7 +3169,7 @@ groups: {{}}
                     std::io::Error::other("simulated controller extension start failure"),
                 ))
             },
-            otap_df_config::validation::no_config,
+            otel_arrow_dfe_config::validation::no_config,
         );
 
         let err = controller
@@ -3241,7 +3241,7 @@ groups: {{}}
                     })
                 }))
             },
-            otap_df_config::validation::no_config,
+            otel_arrow_dfe_config::validation::no_config,
         );
 
         let (result_tx, result_rx) = std_mpsc::channel();
@@ -3814,19 +3814,19 @@ groups:
         assert!(
             topic
                 .subscribe(
-                    otap_df_engine::topic::SubscriptionMode::Balanced {
+                    otel_arrow_dfe_engine::topic::SubscriptionMode::Balanced {
                         group: "workers".into(),
                     },
-                    otap_df_engine::topic::SubscriberOptions::default(),
+                    otel_arrow_dfe_engine::topic::SubscriberOptions::default(),
                 )
                 .is_ok()
         );
         assert!(matches!(
             topic.subscribe(
-                otap_df_engine::topic::SubscriptionMode::Broadcast,
-                otap_df_engine::topic::SubscriberOptions::default(),
+                otel_arrow_dfe_engine::topic::SubscriptionMode::Broadcast,
+                otel_arrow_dfe_engine::topic::SubscriberOptions::default(),
             ),
-            Err(otap_df_engine::error::Error::SubscribeBroadcastNotSupported)
+            Err(otel_arrow_dfe_engine::error::Error::SubscribeBroadcastNotSupported)
         ));
     }
 
@@ -3860,17 +3860,17 @@ groups:
         assert!(
             topic
                 .subscribe(
-                    otap_df_engine::topic::SubscriptionMode::Broadcast,
-                    otap_df_engine::topic::SubscriberOptions::default(),
+                    otel_arrow_dfe_engine::topic::SubscriptionMode::Broadcast,
+                    otel_arrow_dfe_engine::topic::SubscriberOptions::default(),
                 )
                 .is_ok()
         );
         assert!(matches!(
             topic.subscribe(
-                otap_df_engine::topic::SubscriptionMode::Balanced { group: "g1".into() },
-                otap_df_engine::topic::SubscriberOptions::default(),
+                otel_arrow_dfe_engine::topic::SubscriptionMode::Balanced { group: "g1".into() },
+                otel_arrow_dfe_engine::topic::SubscriberOptions::default(),
             ),
-            Err(otap_df_engine::error::Error::SubscribeBalancedNotSupported)
+            Err(otel_arrow_dfe_engine::error::Error::SubscribeBalancedNotSupported)
         ));
     }
 
@@ -3922,16 +3922,16 @@ groups:
         assert!(
             topic
                 .subscribe(
-                    otap_df_engine::topic::SubscriptionMode::Broadcast,
-                    otap_df_engine::topic::SubscriberOptions::default(),
+                    otel_arrow_dfe_engine::topic::SubscriptionMode::Broadcast,
+                    otel_arrow_dfe_engine::topic::SubscriberOptions::default(),
                 )
                 .is_ok()
         );
         assert!(
             topic
                 .subscribe(
-                    otap_df_engine::topic::SubscriptionMode::Balanced { group: "g3".into() },
-                    otap_df_engine::topic::SubscriberOptions::default(),
+                    otel_arrow_dfe_engine::topic::SubscriptionMode::Balanced { group: "g3".into() },
+                    otel_arrow_dfe_engine::topic::SubscriberOptions::default(),
                 )
                 .is_ok()
         );
@@ -3966,16 +3966,16 @@ groups:
         assert!(
             topic
                 .subscribe(
-                    otap_df_engine::topic::SubscriptionMode::Broadcast,
-                    otap_df_engine::topic::SubscriberOptions::default(),
+                    otel_arrow_dfe_engine::topic::SubscriptionMode::Broadcast,
+                    otel_arrow_dfe_engine::topic::SubscriberOptions::default(),
                 )
                 .is_ok()
         );
         assert!(
             topic
                 .subscribe(
-                    otap_df_engine::topic::SubscriptionMode::Balanced { group: "g1".into() },
-                    otap_df_engine::topic::SubscriberOptions::default(),
+                    otel_arrow_dfe_engine::topic::SubscriptionMode::Balanced { group: "g1".into() },
+                    otel_arrow_dfe_engine::topic::SubscriberOptions::default(),
                 )
                 .is_ok()
         );
@@ -4017,17 +4017,17 @@ groups:
         assert!(
             global_topic
                 .subscribe(
-                    otap_df_engine::topic::SubscriptionMode::Broadcast,
-                    otap_df_engine::topic::SubscriberOptions::default(),
+                    otel_arrow_dfe_engine::topic::SubscriptionMode::Broadcast,
+                    otel_arrow_dfe_engine::topic::SubscriberOptions::default(),
                 )
                 .is_ok()
         );
         assert!(matches!(
             group_topic.subscribe(
-                otap_df_engine::topic::SubscriptionMode::Broadcast,
-                otap_df_engine::topic::SubscriberOptions::default(),
+                otel_arrow_dfe_engine::topic::SubscriptionMode::Broadcast,
+                otel_arrow_dfe_engine::topic::SubscriberOptions::default(),
             ),
-            Err(otap_df_engine::error::Error::SubscribeBroadcastNotSupported)
+            Err(otel_arrow_dfe_engine::error::Error::SubscribeBroadcastNotSupported)
         ));
     }
 
@@ -4067,18 +4067,18 @@ groups:
         assert!(
             topic
                 .subscribe(
-                    otap_df_engine::topic::SubscriptionMode::Broadcast,
-                    otap_df_engine::topic::SubscriberOptions::default(),
+                    otel_arrow_dfe_engine::topic::SubscriptionMode::Broadcast,
+                    otel_arrow_dfe_engine::topic::SubscriberOptions::default(),
                 )
                 .is_ok()
         );
         assert!(
             topic
                 .subscribe(
-                    otap_df_engine::topic::SubscriptionMode::Balanced {
+                    otel_arrow_dfe_engine::topic::SubscriptionMode::Balanced {
                         group: "workers".into(),
                     },
-                    otap_df_engine::topic::SubscriberOptions::default(),
+                    otel_arrow_dfe_engine::topic::SubscriberOptions::default(),
                 )
                 .is_ok()
         );
@@ -4120,18 +4120,18 @@ groups:
 
         assert!(matches!(
             topic.subscribe(
-                otap_df_engine::topic::SubscriptionMode::Broadcast,
-                otap_df_engine::topic::SubscriberOptions::default(),
+                otel_arrow_dfe_engine::topic::SubscriptionMode::Broadcast,
+                otel_arrow_dfe_engine::topic::SubscriberOptions::default(),
             ),
-            Err(otap_df_engine::error::Error::SubscribeBroadcastNotSupported)
+            Err(otel_arrow_dfe_engine::error::Error::SubscribeBroadcastNotSupported)
         ));
         assert!(
             topic
                 .subscribe(
-                    otap_df_engine::topic::SubscriptionMode::Balanced {
+                    otel_arrow_dfe_engine::topic::SubscriptionMode::Balanced {
                         group: "workers".into(),
                     },
-                    otap_df_engine::topic::SubscriberOptions::default(),
+                    otel_arrow_dfe_engine::topic::SubscriberOptions::default(),
                 )
                 .is_ok()
         );
@@ -4214,15 +4214,15 @@ groups:
             .expect("local_block topic must exist");
         assert_eq!(
             local_block.default_queue_on_full(),
-            otap_df_config::topic::TopicQueueOnFullPolicy::Block
+            otel_arrow_dfe_config::topic::TopicQueueOnFullPolicy::Block
         );
         assert_eq!(
             local_block.default_ack_propagation_mode(),
-            otap_df_config::topic::TopicAckPropagationMode::Disabled
+            otel_arrow_dfe_config::topic::TopicAckPropagationMode::Disabled
         );
         assert_eq!(
             local_block.broadcast_on_lag_policy(),
-            otap_df_config::topic::TopicBroadcastOnLagPolicy::DropOldest
+            otel_arrow_dfe_config::topic::TopicBroadcastOnLagPolicy::DropOldest
         );
         assert_eq!(
             local_block.default_publish_outcome_config().max_in_flight,
@@ -4239,15 +4239,15 @@ groups:
             .expect("overridden topic must exist");
         assert_eq!(
             overridden.default_queue_on_full(),
-            otap_df_config::topic::TopicQueueOnFullPolicy::Block
+            otel_arrow_dfe_config::topic::TopicQueueOnFullPolicy::Block
         );
         assert_eq!(
             overridden.default_ack_propagation_mode(),
-            otap_df_config::topic::TopicAckPropagationMode::Disabled
+            otel_arrow_dfe_config::topic::TopicAckPropagationMode::Disabled
         );
         assert_eq!(
             overridden.broadcast_on_lag_policy(),
-            otap_df_config::topic::TopicBroadcastOnLagPolicy::DropOldest
+            otel_arrow_dfe_config::topic::TopicBroadcastOnLagPolicy::DropOldest
         );
         assert_eq!(
             overridden.default_publish_outcome_config().max_in_flight,
@@ -4314,16 +4314,16 @@ groups:
 
         let mut balanced = topic
             .subscribe(
-                otap_df_engine::topic::SubscriptionMode::Balanced {
+                otel_arrow_dfe_engine::topic::SubscriptionMode::Balanced {
                     group: "workers".into(),
                 },
-                otap_df_engine::topic::SubscriberOptions::default(),
+                otel_arrow_dfe_engine::topic::SubscriberOptions::default(),
             )
             .expect("balanced subscription should succeed");
         let mut broadcast = topic
             .subscribe(
-                otap_df_engine::topic::SubscriptionMode::Broadcast,
-                otap_df_engine::topic::SubscriberOptions::default(),
+                otel_arrow_dfe_engine::topic::SubscriptionMode::Broadcast,
+                otel_arrow_dfe_engine::topic::SubscriberOptions::default(),
             )
             .expect("broadcast subscription should succeed");
 
@@ -4331,31 +4331,31 @@ groups:
             topic
                 .try_publish(Arc::new(()))
                 .expect("publish should succeed"),
-            otap_df_engine::topic::PublishOutcome::Published
+            otel_arrow_dfe_engine::topic::PublishOutcome::Published
         );
         assert_eq!(
             topic
                 .try_publish(Arc::new(()))
                 .expect("publish should report backpressure once balanced is full"),
-            otap_df_engine::topic::PublishOutcome::DroppedOnFull
+            otel_arrow_dfe_engine::topic::PublishOutcome::DroppedOnFull
         );
         assert_eq!(
             topic
                 .try_publish(Arc::new(()))
                 .expect("publish should keep reporting backpressure while balanced is full"),
-            otap_df_engine::topic::PublishOutcome::DroppedOnFull
+            otel_arrow_dfe_engine::topic::PublishOutcome::DroppedOnFull
         );
         assert_eq!(
             topic.broadcast_on_lag_policy(),
-            otap_df_config::topic::TopicBroadcastOnLagPolicy::Disconnect
+            otel_arrow_dfe_config::topic::TopicBroadcastOnLagPolicy::Disconnect
         );
         topic.close();
 
         let mut balanced_messages = 0usize;
         while let Ok(item) = balanced.recv().await {
             match item {
-                otap_df_engine::topic::RecvItem::Message(_) => balanced_messages += 1,
-                otap_df_engine::topic::RecvItem::Lagged { missed } => {
+                otel_arrow_dfe_engine::topic::RecvItem::Message(_) => balanced_messages += 1,
+                otel_arrow_dfe_engine::topic::RecvItem::Lagged { missed } => {
                     panic!("unexpected lag for balanced subscription: missed={missed}");
                 }
             }
@@ -4365,8 +4365,8 @@ groups:
         let mut broadcast_messages = 0usize;
         while let Ok(item) = broadcast.recv().await {
             match item {
-                otap_df_engine::topic::RecvItem::Message(_) => broadcast_messages += 1,
-                otap_df_engine::topic::RecvItem::Lagged { missed } => {
+                otel_arrow_dfe_engine::topic::RecvItem::Message(_) => broadcast_messages += 1,
+                otel_arrow_dfe_engine::topic::RecvItem::Lagged { missed } => {
                     panic!("unexpected lag with broadcast capacity 3: missed={missed}");
                 }
             }

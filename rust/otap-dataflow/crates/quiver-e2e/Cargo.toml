@@ -16,7 +16,7 @@ name = "quiver-e2e"
 path = "src/main.rs"
 
 [dependencies]
-quiver = { workspace = true, features = ["mmap"] }
+otel-arrow-dfe-quiver = { workspace = true, features = ["mmap"] }
 arrow-array.workspace = true
 arrow-schema.workspace = true
 tempfile.workspace = true

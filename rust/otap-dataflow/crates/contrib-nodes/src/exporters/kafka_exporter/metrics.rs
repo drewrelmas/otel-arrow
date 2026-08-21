@@ -7,12 +7,12 @@
 //! from the data-plane admin `/api/v1/metrics` endpoint. They follow the standard
 //! `metric_set` pattern used by other OTAP nodes.
 
-use otap_df_engine::context::PipelineContext;
-use otap_df_telemetry::common_attributes::{Outcome, SignalOutcomeAttributes};
-use otap_df_telemetry::instrument::Counter;
-use otap_df_telemetry::metrics::{MeasurementMetricSet, MetricSet};
-use otap_df_telemetry::reporter::MetricsReporter;
-use otap_df_telemetry_macros::metric_set;
+use otel_arrow_dfe_engine::context::PipelineContext;
+use otel_arrow_dfe_telemetry::common_attributes::{Outcome, SignalOutcomeAttributes};
+use otel_arrow_dfe_telemetry::instrument::Counter;
+use otel_arrow_dfe_telemetry::metrics::{MeasurementMetricSet, MetricSet};
+use otel_arrow_dfe_telemetry::reporter::MetricsReporter;
+use otel_arrow_dfe_telemetry_macros::metric_set;
 
 /// Signal-specific export completion metrics.
 #[metric_set(
@@ -65,21 +65,23 @@ impl KafkaExporterMetrics {
     pub fn report(
         &mut self,
         reporter: &mut MetricsReporter,
-    ) -> Result<(), otap_df_telemetry::error::Error> {
+    ) -> Result<(), otel_arrow_dfe_telemetry::error::Error> {
         reporter
             .report(&mut self.operational_metrics)
             .and_then(|()| reporter.report_measurement(&mut self.export_metrics))
     }
 
     /// Retrieves the terminal snapshots of the metrics.
-    pub fn terminal_snapshots(&mut self) -> Vec<otap_df_telemetry::metrics::MetricSetSnapshot> {
+    pub fn terminal_snapshots(
+        &mut self,
+    ) -> Vec<otel_arrow_dfe_telemetry::metrics::MetricSetSnapshot> {
         let mut snapshots = self.operational_metrics.terminal_snapshots();
         snapshots.extend(self.export_metrics.terminal_snapshots());
         snapshots
     }
 
     /// Increments the counter for successfully exported messages.
-    pub fn inc_exported(&mut self, signal: otap_df_config::SignalType) {
+    pub fn inc_exported(&mut self, signal: otel_arrow_dfe_config::SignalType) {
         self.export_metrics
             .with(SignalOutcomeAttributes {
                 signal,
@@ -90,7 +92,7 @@ impl KafkaExporterMetrics {
     }
 
     /// Increments the counter for failed export attempts.
-    pub fn inc_failed(&mut self, signal: otap_df_config::SignalType) {
+    pub fn inc_failed(&mut self, signal: otel_arrow_dfe_config::SignalType) {
         self.export_metrics
             .with(SignalOutcomeAttributes {
                 signal,
@@ -125,7 +127,7 @@ impl KafkaExporterMetrics {
 mod tests {
     use super::*;
     use crate::exporters::kafka_exporter::exporter::test_support::pipeline_context;
-    use otap_df_config::SignalType;
+    use otel_arrow_dfe_config::SignalType;
 
     fn new_metrics() -> KafkaExporterMetrics {
         KafkaExporterMetrics::register(&pipeline_context())

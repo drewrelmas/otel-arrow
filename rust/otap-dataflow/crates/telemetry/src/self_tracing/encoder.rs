@@ -8,11 +8,11 @@ use crate::event::LogEvent;
 use crate::registry::EntityKey;
 use crate::registry::TelemetryRegistryHandle;
 use bytes::Bytes;
-use otap_df_config::pipeline::telemetry::{
+use otel_arrow_dfe_config::pipeline::telemetry::{
     AttributeValue as ConfigAttributeValue, AttributeValueArray as ConfigAttributeValueArray,
 };
-use otap_df_pdata::otlp::common::{BoundedBuf, Dropped, EncodeResult, ProtoBuffer};
-use otap_df_pdata::proto::consts::{
+use otel_arrow_dfe_pdata::otlp::common::{BoundedBuf, Dropped, EncodeResult, ProtoBuffer};
+use otel_arrow_dfe_pdata::proto::consts::{
     field_num::common::*, field_num::logs::*, field_num::resource::*, wire_types,
 };
 use std::collections::HashMap;
@@ -677,18 +677,18 @@ mod tests {
     use crate::descriptor::{AttributeField, AttributeValueType, AttributesDescriptor};
     use crate::event::LogEvent;
     use crate::self_tracing::formatter::format_log_record_to_string;
-    use otap_df_config::pipeline::telemetry::{
+    use otel_arrow_dfe_config::pipeline::telemetry::{
         AttributeValue as ConfigAttributeValue, AttributeValueArray as ConfigAttributeValueArray,
     };
-    use otap_df_pdata::proto::opentelemetry::collector::logs::v1::ExportLogsServiceRequest;
-    use otap_df_pdata::proto::opentelemetry::common::v1::{
+    use otel_arrow_dfe_pdata::proto::opentelemetry::collector::logs::v1::ExportLogsServiceRequest;
+    use otel_arrow_dfe_pdata::proto::opentelemetry::common::v1::{
         AnyValue, InstrumentationScope, KeyValue,
     };
-    use otap_df_pdata::proto::opentelemetry::logs::v1::LogRecord;
-    use otap_df_pdata::proto::opentelemetry::logs::v1::ResourceLogs;
-    use otap_df_pdata::proto::opentelemetry::logs::v1::ScopeLogs;
-    use otap_df_pdata::proto::opentelemetry::logs::v1::SeverityNumber;
-    use otap_df_pdata::proto::opentelemetry::resource::v1::Resource;
+    use otel_arrow_dfe_pdata::proto::opentelemetry::logs::v1::LogRecord;
+    use otel_arrow_dfe_pdata::proto::opentelemetry::logs::v1::ResourceLogs;
+    use otel_arrow_dfe_pdata::proto::opentelemetry::logs::v1::ScopeLogs;
+    use otel_arrow_dfe_pdata::proto::opentelemetry::logs::v1::SeverityNumber;
+    use otel_arrow_dfe_pdata::proto::opentelemetry::resource::v1::Resource;
     use prost::Message;
     use std::collections::{BTreeMap, HashMap};
     use std::time::{Duration, SystemTime};
@@ -999,9 +999,9 @@ mod tests {
     #[test]
     fn record_str_halves_remaining_budget_across_attributes() {
         use crate::self_tracing::encoder::DirectFieldVisitor;
-        use otap_df_pdata::otlp::common::TRUNCATION_SUFFIX;
-        use otap_df_pdata::otlp::common::{BoundedBuf, StackProtoBuffer};
-        use otap_df_pdata::proto::opentelemetry::common::v1::KeyValue as ProtoKeyValue;
+        use otel_arrow_dfe_pdata::otlp::common::TRUNCATION_SUFFIX;
+        use otel_arrow_dfe_pdata::otlp::common::{BoundedBuf, StackProtoBuffer};
+        use otel_arrow_dfe_pdata::proto::opentelemetry::common::v1::KeyValue as ProtoKeyValue;
         use prost::Message;
         use tracing::field::Visit;
 
@@ -1059,7 +1059,7 @@ mod tests {
                 .as_ref()
                 .and_then(|v| v.value.as_ref())
                 .map(|v| match v {
-                    otap_df_pdata::proto::opentelemetry::common::v1::any_value::Value::StringValue(s) => s.clone(),
+                    otel_arrow_dfe_pdata::proto::opentelemetry::common::v1::any_value::Value::StringValue(s) => s.clone(),
                     _ => panic!("expected string value"),
                 })
                 .unwrap();
@@ -1118,8 +1118,8 @@ mod tests {
     /// when the value comfortably fits.
     #[test]
     fn record_debug_writes_fmt_output_without_intermediate_string() {
-        use otap_df_pdata::otlp::common::StackProtoBuffer;
-        use otap_df_pdata::proto::opentelemetry::common::v1::KeyValue as ProtoKeyValue;
+        use otel_arrow_dfe_pdata::otlp::common::StackProtoBuffer;
+        use otel_arrow_dfe_pdata::proto::opentelemetry::common::v1::KeyValue as ProtoKeyValue;
         use prost::Message;
         use tracing::field::Visit;
 
@@ -1156,7 +1156,7 @@ mod tests {
         let kv = ProtoKeyValue::decode(&cursor[..len as usize]).unwrap();
         assert_eq!(kv.key, "dbg");
         let s = match kv.value.as_ref().unwrap().value.as_ref().unwrap() {
-            otap_df_pdata::proto::opentelemetry::common::v1::any_value::Value::StringValue(s) => {
+            otel_arrow_dfe_pdata::proto::opentelemetry::common::v1::any_value::Value::StringValue(s) => {
                 s.clone()
             }
             other => panic!("expected StringValue, got {other:?}"),
@@ -1171,7 +1171,7 @@ mod tests {
     /// incrementing `dropped_count`.
     #[test]
     fn record_debug_overflow_rolls_back_and_increments_dropped() {
-        use otap_df_pdata::otlp::common::{BoundedBuf, StackProtoBuffer};
+        use otel_arrow_dfe_pdata::otlp::common::{BoundedBuf, StackProtoBuffer};
         use tracing::field::Visit;
 
         // A Debug impl that writes far more than the buffer can hold.

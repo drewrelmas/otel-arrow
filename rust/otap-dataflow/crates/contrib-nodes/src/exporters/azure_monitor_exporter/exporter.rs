@@ -2,21 +2,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use otap_df_channel::error::RecvError;
-use otap_df_config::SignalType;
-use otap_df_engine::ConsumerEffectHandlerExtension;
-use otap_df_engine::capability::auth::BearerToken;
-use otap_df_engine::context::PipelineContext;
-use otap_df_engine::control::{AckMsg, NackMsg, NodeControlMsg};
-use otap_df_engine::error::Error as EngineError;
-use otap_df_engine::local::capability::auth::bearer_token_provider::BearerTokenProvider;
-use otap_df_engine::local::exporter::{EffectHandler, Exporter};
-use otap_df_engine::message::{ExporterInbox, Message};
-use otap_df_engine::terminal_state::TerminalState;
-use otap_df_pdata::otlp::OtlpProtoBytes;
-use otap_df_pdata::views::otap::OtapLogsView;
-use otap_df_pdata::views::otlp::bytes::logs::RawLogsData;
-use otap_df_pdata::{OtapArrowRecords, OtapPayload};
+use otel_arrow_dfe_channel::error::RecvError;
+use otel_arrow_dfe_config::SignalType;
+use otel_arrow_dfe_engine::ConsumerEffectHandlerExtension;
+use otel_arrow_dfe_engine::capability::auth::BearerToken;
+use otel_arrow_dfe_engine::context::PipelineContext;
+use otel_arrow_dfe_engine::control::{AckMsg, NackMsg, NodeControlMsg};
+use otel_arrow_dfe_engine::error::Error as EngineError;
+use otel_arrow_dfe_engine::local::capability::auth::bearer_token_provider::BearerTokenProvider;
+use otel_arrow_dfe_engine::local::exporter::{EffectHandler, Exporter};
+use otel_arrow_dfe_engine::message::{ExporterInbox, Message};
+use otel_arrow_dfe_engine::terminal_state::TerminalState;
+use otel_arrow_dfe_pdata::otlp::OtlpProtoBytes;
+use otel_arrow_dfe_pdata::views::otap::OtapLogsView;
+use otel_arrow_dfe_pdata::views::otlp::bytes::logs::RawLogsData;
+use otel_arrow_dfe_pdata::{OtapArrowRecords, OtapPayload};
 
 use super::client::LogsIngestionClientPool;
 use super::config::Config;
@@ -29,11 +29,11 @@ use super::metrics::AzureMonitorExporterMetricsRc;
 use super::state::AzureMonitorExporterState;
 use super::transformer::Transformer;
 use futures::StreamExt;
-use otap_df_otap::pdata::{Context, OtapPdata};
+use otel_arrow_dfe_otap::pdata::{Context, OtapPdata};
 use reqwest::header::HeaderValue;
 
-use otap_df_telemetry::common_attributes::{HttpResponse, Outcome};
-use otap_df_telemetry::{otel_debug, otel_error, otel_info, otel_warn};
+use otel_arrow_dfe_telemetry::common_attributes::{HttpResponse, Outcome};
+use otel_arrow_dfe_telemetry::{otel_debug, otel_error, otel_info, otel_warn};
 
 use bytes::Bytes;
 use std::cell::RefCell;
@@ -685,19 +685,19 @@ mod tests {
     use bytes::Bytes;
     use futures::StreamExt;
     use http::StatusCode;
-    use otap_df_channel::mpsc;
-    use otap_df_engine::Interests;
-    use otap_df_engine::capability::CapabilityError;
-    use otap_df_engine::capability::auth::BearerToken;
-    use otap_df_engine::capability::auth::bearer_token_provider::TokenStream;
-    use otap_df_engine::context::{ControllerContext, PipelineContext};
-    use otap_df_engine::local::exporter::EffectHandler;
-    use otap_df_engine::local::message::LocalReceiver;
-    use otap_df_engine::message::Receiver;
-    use otap_df_engine::node::NodeId;
-    use otap_df_otap::pdata::Context;
-    use otap_df_telemetry::registry::TelemetryRegistryHandle;
-    use otap_df_telemetry::reporter::MetricsReporter;
+    use otel_arrow_dfe_channel::mpsc;
+    use otel_arrow_dfe_engine::Interests;
+    use otel_arrow_dfe_engine::capability::CapabilityError;
+    use otel_arrow_dfe_engine::capability::auth::BearerToken;
+    use otel_arrow_dfe_engine::capability::auth::bearer_token_provider::TokenStream;
+    use otel_arrow_dfe_engine::context::{ControllerContext, PipelineContext};
+    use otel_arrow_dfe_engine::local::exporter::EffectHandler;
+    use otel_arrow_dfe_engine::local::message::LocalReceiver;
+    use otel_arrow_dfe_engine::message::Receiver;
+    use otel_arrow_dfe_engine::node::NodeId;
+    use otel_arrow_dfe_otap::pdata::Context;
+    use otel_arrow_dfe_telemetry::registry::TelemetryRegistryHandle;
+    use otel_arrow_dfe_telemetry::reporter::MetricsReporter;
     use std::collections::HashMap;
     use std::time::{Duration, Instant};
 
@@ -718,7 +718,7 @@ mod tests {
     }
 
     fn create_test_pipeline_ctx() -> PipelineContext {
-        otap_df_otap::crypto::ensure_crypto_provider();
+        otel_arrow_dfe_otap::crypto::ensure_crypto_provider();
         let registry = TelemetryRegistryHandle::new();
         let controller = ControllerContext::new(registry);
         controller.pipeline_context_with("grp".into(), "pipeline".into(), 0, 1, 0)

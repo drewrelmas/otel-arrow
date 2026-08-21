@@ -37,13 +37,13 @@ name = "df_engine"
 path = "src/main.rs"
 
 [dependencies]
-otap-df-config.workspace = true
-otap-df-contrib-extensions.workspace = true
-otap-df-contrib-nodes.workspace = true
-otap-df-controller.workspace = true
-otap-df-core-nodes.workspace = true
-otap-df-engine.workspace = true
-otap-df-otap.workspace = true
+otel-arrow-dfe-config.workspace = true
+otel-arrow-dfe-contrib-extensions.workspace = true
+otel-arrow-dfe-contrib-nodes.workspace = true
+otel-arrow-dfe-controller.workspace = true
+otel-arrow-dfe-core-nodes.workspace = true
+otel-arrow-dfe-engine.workspace = true
+otel-arrow-dfe-otap.workspace = true
 clap.workspace = true
 mimalloc = { workspace = true, optional = true }
 dhat = { workspace = true, optional = true }
@@ -53,26 +53,26 @@ cfg-if.workspace = true
 tikv-jemallocator = { workspace = true, optional = true }
 
 [workspace.dependencies]
-otap-df-admin-api = { package = "otel-arrow-dfe-admin-api", path = "crates/admin-api" }
-otap-df-admin-types = { package = "otel-arrow-dfe-admin-types", path = "crates/admin-types" }
-otap-df-pdata-otlp-macros = { package = "otel-arrow-dfe-pdata-otlp-macros", path = "./crates/pdata/src/otlp/macros"}
-otap-df-pdata-otlp-model = { package = "otel-arrow-dfe-pdata-otlp-model", path = "./crates/pdata/src/otlp/model"}
-otap-df-config = { package = "otel-arrow-dfe-config", path = "crates/config" }
-otap-df-contrib-extensions = { package = "otel-arrow-dfe-contrib-extensions", path = "crates/contrib-extensions" }
-otap-df-contrib-nodes = { package = "otel-arrow-dfe-contrib-nodes", path = "crates/contrib-nodes" }
-otap-df-control-channel = { package = "otel-arrow-dfe-control-channel", path = "crates/control-channel" }
-otap-df-controller = { package = "otel-arrow-dfe-controller", path = "crates/controller" }
-otap-df-core-nodes = { package = "otel-arrow-dfe-core-nodes", path = "crates/core-nodes" }
-otap-df-engine = { package = "otel-arrow-dfe-engine", path = "crates/engine" }
-otap-df-expohisto = { package = "otel-arrow-dfe-expohisto", path = "crates/expohisto" }
-otap-df-otap = { package = "otel-arrow-dfe-otap", path = "crates/otap" }
-otap-df-wasm-host = { package = "otel-arrow-dfe-wasm-host", path = "crates/wasm-host" }
-otap-test-tls-certs = { package = "otel-arrow-dfe-test-tls-certs", path = "crates/otap-test-tls-certs" }
-otap-df-test-net = { package = "otel-arrow-dfe-test-net", path = "crates/otap-test-net" }
-otap-df-pdata = { package = "otel-arrow-dfe-pdata", path = "crates/pdata" }
-otap-df-pdata-views = { package = "otel-arrow-dfe-pdata-views", path = "crates/pdata-views" }
-otap-df-telemetry = { package = "otel-arrow-dfe-telemetry", path = "crates/telemetry" }
-quiver = { package = "otel-arrow-dfe-quiver", path = "crates/quiver" }
+otel-arrow-dfe-admin-api = { path = "crates/admin-api" }
+otel-arrow-dfe-admin-types = { path = "crates/admin-types" }
+otel-arrow-dfe-pdata-otlp-macros = { path = "./crates/pdata/src/otlp/macros"}
+otel-arrow-dfe-pdata-otlp-model = { path = "./crates/pdata/src/otlp/model"}
+otel-arrow-dfe-config = { path = "crates/config" }
+otel-arrow-dfe-contrib-extensions = { path = "crates/contrib-extensions" }
+otel-arrow-dfe-contrib-nodes = { path = "crates/contrib-nodes" }
+otel-arrow-dfe-control-channel = { path = "crates/control-channel" }
+otel-arrow-dfe-controller = { path = "crates/controller" }
+otel-arrow-dfe-core-nodes = { path = "crates/core-nodes" }
+otel-arrow-dfe-engine = { path = "crates/engine" }
+otel-arrow-dfe-expohisto = { path = "crates/expohisto" }
+otel-arrow-dfe-otap = { path = "crates/otap" }
+otel-arrow-dfe-wasm-host = { path = "crates/wasm-host" }
+otel-arrow-dfe-test-tls-certs = { path = "crates/otap-test-tls-certs" }
+otel-arrow-dfe-test-net = { path = "crates/otap-test-net" }
+otel-arrow-dfe-pdata = { path = "crates/pdata" }
+otel-arrow-dfe-pdata-views = { path = "crates/pdata-views" }
+otel-arrow-dfe-telemetry = { path = "crates/telemetry" }
+otel-arrow-dfe-quiver = { path = "crates/quiver" }
 data_engine_expressions = { path = "../experimental/query_engine/expressions" }
 data_engine_kql_parser = { path = "../experimental/query_engine/kql-parser" }
 data_engine_parser_abstractions = { path = "../experimental/query_engine/parser-abstractions"}
@@ -273,14 +273,14 @@ eventheader_dynamic = "0.5.0"
 include_dir = "0.7.4"
 mime_guess = "2.0.5"
 minijinja = "2"
-otap-df-admin = { package = "otel-arrow-dfe-admin", path = 'crates/admin' }
-otap-df-channel = { package = "otel-arrow-dfe-channel", path = 'crates/channel' }
-otap-df-engine-macros = { package = "otel-arrow-dfe-engine-macros", path = 'crates/engine-macros' }
-otap-df-component-inventory-syntax = { package = "otel-arrow-dfe-component-inventory-syntax", path = 'crates/component-inventory-syntax' }
-otap-df-query-engine-languages = { package = "otel-arrow-dfe-query-engine-languages", path = 'crates/query-engine-languages' }
-otap-df-query-engine = { package = "otel-arrow-dfe-query-engine", path = 'crates/query-engine' }
-otap-df-state = { package = "otel-arrow-dfe-state", path = 'crates/state' }
-otap-df-telemetry-macros = { package = "otel-arrow-dfe-telemetry-macros", path = 'crates/telemetry-macros' }
+otel-arrow-dfe-admin = { path = 'crates/admin' }
+otel-arrow-dfe-channel = { path = 'crates/channel' }
+otel-arrow-dfe-engine-macros = { path = 'crates/engine-macros' }
+otel-arrow-dfe-component-inventory-syntax = { path = 'crates/component-inventory-syntax' }
+otel-arrow-dfe-query-engine-languages = { path = 'crates/query-engine-languages' }
+otel-arrow-dfe-query-engine = { path = 'crates/query-engine' }
+otel-arrow-dfe-state = { path = 'crates/state' }
+otel-arrow-dfe-telemetry-macros = { path = 'crates/telemetry-macros' }
 prost-build = "0.14"
 ratatui = "0.30"
 testcontainers = "0.27"
@@ -303,12 +303,12 @@ otap-df-pdata-views = { path = "compat/otap-df-pdata-views" }
 default = ["jemalloc", "crypto-ring", "dev-tools", "admin-live-logs-ws"]
 jemalloc = [
     "dep:tikv-jemallocator",
-    "otap-df-engine/jemalloc",
-    "otap-df-controller/jemalloc-pprof",
+    "otel-arrow-dfe-engine/jemalloc",
+    "otel-arrow-dfe-controller/jemalloc-pprof",
 ]
 mimalloc = ["dep:mimalloc"]
-azure = ["otap-df-otap/azure"]
-aws = ["otap-df-otap/aws", "otap-df-contrib-nodes/aws"]
+azure = ["otel-arrow-dfe-otap/azure"]
+aws = ["otel-arrow-dfe-otap/aws", "otel-arrow-dfe-contrib-nodes/aws"]
 unsafe-optimizations = ["unchecked-index", "unchecked-arithmetic"]
 unchecked-index = []
 unchecked-arithmetic = []
@@ -321,45 +321,45 @@ dhat-heap = [
 # `cargo test` running the full suite locally; CI jobs that drop
 # `dev-tools` (e.g. the Linux ARM `build_nonrequired` job) avoid the
 # weaver / gix / reqwest / native-tls / openssl-sys C build.
-dev-tools = ["otap-df-core-nodes/dev-tools", "otap-df-otap/integration-tests"]
+dev-tools = ["otel-arrow-dfe-core-nodes/dev-tools", "otel-arrow-dfe-otap/integration-tests"]
 
 # Admin UI live log streaming over WebSocket.
-admin-live-logs-ws = ["otap-df-controller/admin-live-logs-ws"]
+admin-live-logs-ws = ["otel-arrow-dfe-controller/admin-live-logs-ws"]
 
 # Cryptographic provider selection (mutually exclusive).
 # Exactly one must be enabled when using TLS or any rustls-backed dependency (e.g. reqwest).
-crypto-ring = ["otap-df-otap/crypto-ring", "otap-df-contrib-extensions/crypto-ring"]
-crypto-aws-lc = ["otap-df-otap/crypto-aws-lc", "otap-df-contrib-extensions/crypto-aws-lc"]
-crypto-symcrypt = ["otap-df-otap/crypto-symcrypt"]
-crypto-openssl = ["otap-df-otap/crypto-openssl", "otap-df-contrib-extensions/crypto-openssl"]
+crypto-ring = ["otel-arrow-dfe-otap/crypto-ring", "otel-arrow-dfe-contrib-extensions/crypto-ring"]
+crypto-aws-lc = ["otel-arrow-dfe-otap/crypto-aws-lc", "otel-arrow-dfe-contrib-extensions/crypto-aws-lc"]
+crypto-symcrypt = ["otel-arrow-dfe-otap/crypto-symcrypt"]
+crypto-openssl = ["otel-arrow-dfe-otap/crypto-openssl", "otel-arrow-dfe-contrib-extensions/crypto-openssl"]
 
 # Contrib exporters (opt-in) - now in contrib-nodes
-contrib-exporters = ["otap-df-contrib-nodes/contrib-exporters"]
-geneva-exporter = ["otap-df-contrib-nodes/geneva-exporter"]
-geneva-certificate-auth = ["geneva-exporter", "otap-df-contrib-nodes/geneva-certificate-auth"]
+contrib-exporters = ["otel-arrow-dfe-contrib-nodes/contrib-exporters"]
+geneva-exporter = ["otel-arrow-dfe-contrib-nodes/geneva-exporter"]
+geneva-certificate-auth = ["geneva-exporter", "otel-arrow-dfe-contrib-nodes/geneva-certificate-auth"]
 # The Azure Monitor exporter requires the Azure Identity auth extension to
 # authenticate outbound requests, so enabling it pulls in that extension.
 azure-monitor-exporter = [
-    "otap-df-contrib-nodes/azure-monitor-exporter",
+    "otel-arrow-dfe-contrib-nodes/azure-monitor-exporter",
     "azure-identity-auth-extension",
 ]
 # Contrib extensions (opt-in) - in contrib-extensions
-contrib-extensions = ["otap-df-contrib-extensions/contrib-extensions"]
-azure-identity-auth-extension = ["otap-df-contrib-extensions/azure-identity-auth-extension"]
-oauth2-client-auth-extension = ["otap-df-contrib-extensions/oauth2-client-auth-extension"]
+contrib-extensions = ["otel-arrow-dfe-contrib-extensions/contrib-extensions"]
+azure-identity-auth-extension = ["otel-arrow-dfe-contrib-extensions/azure-identity-auth-extension"]
+oauth2-client-auth-extension = ["otel-arrow-dfe-contrib-extensions/oauth2-client-auth-extension"]
 # Contrib receivers (opt-in) - now in contrib-nodes
-contrib-receivers = ["otap-df-contrib-nodes/contrib-receivers"]
-kafka-receiver = ["otap-df-contrib-nodes/kafka-receiver"]
-user_events-receiver = ["otap-df-contrib-nodes/user_events-receiver"]
-user_events-eventheader = ["otap-df-contrib-nodes/user_events-eventheader"]
-clickhouse-exporter = ["otap-df-contrib-nodes/clickhouse-exporter"]
+contrib-receivers = ["otel-arrow-dfe-contrib-nodes/contrib-receivers"]
+kafka-receiver = ["otel-arrow-dfe-contrib-nodes/kafka-receiver"]
+user_events-receiver = ["otel-arrow-dfe-contrib-nodes/user_events-receiver"]
+user_events-eventheader = ["otel-arrow-dfe-contrib-nodes/user_events-eventheader"]
+clickhouse-exporter = ["otel-arrow-dfe-contrib-nodes/clickhouse-exporter"]
 # Contrib processors (opt-in) - now in contrib-nodes
-contrib-processors = ["otap-df-contrib-nodes/contrib-processors"]
-condense-attributes-processor = ["otap-df-contrib-nodes/condense-attributes-processor"]
-recordset-kql-processor = ["otap-df-contrib-nodes/recordset-kql-processor"]
-resource-validator-processor = ["otap-df-contrib-nodes/resource-validator-processor"]
+contrib-processors = ["otel-arrow-dfe-contrib-nodes/contrib-processors"]
+condense-attributes-processor = ["otel-arrow-dfe-contrib-nodes/condense-attributes-processor"]
+recordset-kql-processor = ["otel-arrow-dfe-contrib-nodes/recordset-kql-processor"]
+resource-validator-processor = ["otel-arrow-dfe-contrib-nodes/resource-validator-processor"]
 # Contrib receivers (opt-in) - Windows-only
-etw-receiver = ["otap-df-contrib-nodes/etw-receiver"]
+etw-receiver = ["otel-arrow-dfe-contrib-nodes/etw-receiver"]
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tarpaulin_include)'] }

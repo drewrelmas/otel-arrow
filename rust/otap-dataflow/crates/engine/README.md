@@ -435,7 +435,7 @@ When a producer wants to be informed of the outcome via Ack/Nack, it uses a
 call sequence like:
 
 ```rust
-use otap_df_engine::{Interests, ProducerEffectHandlerExtension};
+use otel_arrow_dfe_engine::{Interests, ProducerEffectHandlerExtension};
 
 async fn process(
     msg: Message<OtapPdata>,
@@ -462,7 +462,7 @@ When a consumer finishes processing `pdata` and wants to return an outcome, it
 uses the consumer-side effect-handler extension:
 
 ```rust
-use otap_df_engine::ConsumerEffectHandlerExtension;
+use otel_arrow_dfe_engine::ConsumerEffectHandlerExtension;
 
 async fn export(
     msg: Message<OtapPdata>,

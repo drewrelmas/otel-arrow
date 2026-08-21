@@ -4,7 +4,7 @@
 //! Implementation of the `#[component_inventory]` attribute macro (RFC 0001).
 //!
 //! The macro annotates a security-relevant component and emits one
-//! `ComponentMeta` entry into the `otap_df_engine::inventory::COMPONENT_INVENTORY`
+//! `ComponentMeta` entry into the `otel_arrow_dfe_engine::inventory::COMPONENT_INVENTORY`
 //! distributed slice at link time, mirroring the `#[capability]` ->
 //! `KNOWN_CAPABILITIES` mechanism. The annotated item is re-emitted unchanged.
 //!
@@ -44,7 +44,7 @@
 //! pub struct AdminServer { /* ... */ }
 //! ```
 
-use otap_df_component_inventory_syntax::ComponentInventoryArgs;
+use otel_arrow_dfe_component_inventory_syntax::ComponentInventoryArgs;
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote};
 use syn::{Attribute, Expr, ExprLit, Ident, Item, Lit};
@@ -136,13 +136,13 @@ fn try_expand(args: &ComponentInventoryArgs, item: &Item) -> syn::Result<TokenSt
     })
 }
 
-/// Path to `otap_df_engine` crate: `crate` when compiled within
-/// `otel-arrow-dfe-engine`, otherwise `::otap_df_engine`.
+/// Path to `otel_arrow_dfe_engine` crate: `crate` when compiled within
+/// `otel-arrow-dfe-engine`, otherwise `::otel_arrow_dfe_engine`.
 fn engine_crate_path() -> TokenStream {
     if std::env::var("CARGO_CRATE_NAME").as_deref() == Ok("otel_arrow_dfe_engine") {
         quote! { crate }
     } else {
-        quote! { ::otap_df_engine }
+        quote! { ::otel_arrow_dfe_engine }
     }
 }
 

@@ -22,7 +22,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args().skip(1);
     let event_name = args
         .next()
-        .unwrap_or_else(|| "otap_df_tracefs_demo".to_owned());
+        .unwrap_or_else(|| "otel_arrow_dfe_tracefs_demo".to_owned());
     let count = args
         .next()
         .map(|value| value.parse::<u32>())

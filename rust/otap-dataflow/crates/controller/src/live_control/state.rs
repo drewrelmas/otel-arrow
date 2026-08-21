@@ -475,7 +475,7 @@ pub(super) struct LogicalPipelineRecord {
 /// Topic runtime properties that cannot be mutated by live rollout.
 pub(super) struct TopicRuntimeProfile {
     pub(super) backend: TopicBackendKind,
-    pub(super) policies: otap_df_config::topic::TopicPolicies,
+    pub(super) policies: otel_arrow_dfe_config::topic::TopicPolicies,
     pub(super) selected_mode: InferredTopicMode,
 }
 

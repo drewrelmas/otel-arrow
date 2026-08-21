@@ -57,7 +57,7 @@ See the [telemetry-macros crate](../telemetry-macros) for details.
 
 ## Logging Macros
 
-There are internal macros defined in `otap_df_telemetry` with names
+There are internal macros defined in `otel_arrow_dfe_telemetry` with names
 `otel_info!`, `otel_warn!`, `otel_error!`, and `otel_debug!`. These
 macros all require a constant event-name string as the first argument;
 the event name must follow
@@ -70,7 +70,7 @@ follow Tokio `tracing` syntax for key-value expressions.
 For example:
 
 ```rust
-use otap_df_telemetry::otel_info;
+use otel_arrow_dfe_telemetry::otel_info;
 
 otel_info!(
     "syslog_cef_receiver.start",

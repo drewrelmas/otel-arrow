@@ -18,9 +18,9 @@ workspace = true
 [dependencies]
 
 [dev-dependencies]
-otap-df-engine = { workspace = true }
-otap-df-core-nodes = { workspace = true }
-otap-df-contrib-nodes = { workspace = true }
-otap-df-otap = { workspace = true }
+otel-arrow-dfe-engine = { workspace = true }
+otel-arrow-dfe-core-nodes = { workspace = true }
+otel-arrow-dfe-contrib-nodes = { workspace = true }
+otel-arrow-dfe-otap = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

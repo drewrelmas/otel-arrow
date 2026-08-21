@@ -68,7 +68,7 @@ fn generate_otlp_protos(out_dir: &Path, base: &str) {
         .out_dir(out_dir);
 
     // Note: this adds derive expressions for each OTLP message type.
-    let builder = otap_df_pdata_otlp_model::add_type_attributes(builder);
+    let builder = otel_arrow_dfe_pdata_otlp_model::add_type_attributes(builder);
 
     builder
         .compile_with_config(

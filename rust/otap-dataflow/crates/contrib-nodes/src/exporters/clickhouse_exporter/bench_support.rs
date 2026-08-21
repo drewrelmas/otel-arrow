@@ -9,8 +9,8 @@
 //! implementation details part of the production API.
 
 use arrow::array::RecordBatch;
-use otap_df_pdata::OtapArrowRecords;
-use otap_df_pdata::proto::opentelemetry::arrow::v1::ArrowPayloadType;
+use otel_arrow_dfe_pdata::OtapArrowRecords;
+use otel_arrow_dfe_pdata::proto::opentelemetry::arrow::v1::ArrowPayloadType;
 
 use super::transform::logs_fast::{LogsFastTransform, LogsFastTransformer};
 use super::transform::transform_batch::BatchTransformer;

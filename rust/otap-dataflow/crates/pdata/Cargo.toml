@@ -9,7 +9,7 @@ publish.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-otap-df-pdata-views = { workspace = true }
+otel-arrow-dfe-pdata-views = { workspace = true }
 ahash = { workspace = true }
 arrow = { workspace = true }
 arrow-ipc = { workspace = true }
@@ -17,9 +17,9 @@ arrow-schema = { workspace = true }
 datafusion = { workspace = true }
 ciborium = { workspace = true }
 itertools = { workspace = true }
-otap-df-config = { workspace = true }
-otap-df-pdata-otlp-macros = { workspace = true }
-otap-df-pdata-otlp-model = { workspace = true }
+otel-arrow-dfe-config = { workspace = true }
+otel-arrow-dfe-pdata-otlp-macros = { workspace = true }
+otel-arrow-dfe-pdata-otlp-model = { workspace = true }
 bytes = { workspace = true }
 nix = { workspace = true }
 num_enum = { workspace = true }
@@ -43,7 +43,7 @@ tonic-prost = { workspace = true }
 tokio-stream = { workspace = true }
 prost = { workspace = true }
 criterion = { workspace = true }
-otap-df-test-net = { workspace = true }
+otel-arrow-dfe-test-net = { workspace = true }
 
 [lints]
 workspace = true

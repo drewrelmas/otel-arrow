@@ -17,7 +17,7 @@
 //! runtime, so the mechanism is zero-cost.
 //!
 //! [rfc]: https://github.com/open-telemetry/otel-arrow/blob/main/rust/otap-dataflow/rfcs/0001-component-inventory.md
-//! [macro]: otap_df_engine_macros::component_inventory
+//! [macro]: otel_arrow_dfe_engine_macros::component_inventory
 
 /// Component category (RFC 0001).
 ///
@@ -35,7 +35,7 @@
 /// middle segment (e.g. `urn:otel:`**`receiver`**`:otlp`).
 ///
 /// See [`Category`] for the full list of variants and their intended meanings.
-pub use otap_df_component_inventory_syntax::Category;
+pub use otel_arrow_dfe_component_inventory_syntax::Category;
 
 /// Well-known attribute keys (RFC 0001, "Option A": free-form map + key
 /// constants). Contributors are encouraged to use these constants for the

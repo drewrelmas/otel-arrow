@@ -16,7 +16,7 @@
 
 use super::*;
 use chrono::Utc;
-use otap_df_admin::{
+use otel_arrow_dfe_admin::{
     ConfigChangeAction, ConfigChangeStatus, ControlPlane, ControlPlaneError,
     EngineConfigReconcileRequest, EngineConfigReconcileState, EngineConfigReconcileStatus,
     GroupDeleteStatus, PipelineDeleteStatus, PipelineDetails,
@@ -24,9 +24,9 @@ use otap_df_admin::{
     PipelineRolloutSummary as ApiPipelineRolloutSummary, ReconfigureRequest, RolloutCoreStatus,
     RolloutStatus, ShutdownCoreStatus, ShutdownStatus,
 };
-use otap_df_state::conditions::ConditionStatus;
-use otap_df_state::phase::PipelinePhase;
-use otap_df_state::pipeline_status::{PipelineRolloutState, PipelineRolloutSummary};
+use otel_arrow_dfe_state::conditions::ConditionStatus;
+use otel_arrow_dfe_state::phase::PipelinePhase;
+use otel_arrow_dfe_state::pipeline_status::{PipelineRolloutState, PipelineRolloutSummary};
 use std::any::Any;
 use std::backtrace::Backtrace;
 use std::collections::VecDeque;

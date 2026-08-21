@@ -30,28 +30,28 @@
 use async_trait::async_trait;
 use futures::future::LocalBoxFuture;
 use linkme::distributed_slice;
-use otap_df_config::node::NodeUserConfig;
-use otap_df_config::validation::validate_typed_config;
-use otap_df_config::{SignalFormat, SignalType};
-use otap_df_engine::ExporterFactory;
-use otap_df_engine::config::ExporterConfig;
-use otap_df_engine::context::PipelineContext;
-use otap_df_engine::control::NodeControlMsg;
-use otap_df_engine::error::{Error, ExporterErrorKind, format_error_sources};
-use otap_df_engine::exporter::ExporterWrapper;
-use otap_df_engine::local::exporter::{EffectHandler, Exporter};
-use otap_df_engine::message::{ExporterInbox, Message};
-use otap_df_engine::node::NodeId;
-use otap_df_engine::terminal_state::TerminalState;
-use otap_df_otap::OTAP_EXPORTER_FACTORIES;
-use otap_df_otap::metrics::ExporterPDataExportMetrics;
-use otap_df_otap::pdata::OtapPdata;
-use otap_df_pdata::OtapArrowRecords;
-use otap_df_pdata::TryIntoWithOptions;
-use otap_df_pdata::proto::opentelemetry::arrow::v1::ArrowPayloadType;
-use otap_df_telemetry::common_attributes::{Outcome, SignalOutcomeAttributes};
-use otap_df_telemetry::metrics::MetricSetHandler;
-use otap_df_telemetry::metrics::{MeasurementMetricSet, MetricSet};
+use otel_arrow_dfe_config::node::NodeUserConfig;
+use otel_arrow_dfe_config::validation::validate_typed_config;
+use otel_arrow_dfe_config::{SignalFormat, SignalType};
+use otel_arrow_dfe_engine::ExporterFactory;
+use otel_arrow_dfe_engine::config::ExporterConfig;
+use otel_arrow_dfe_engine::context::PipelineContext;
+use otel_arrow_dfe_engine::control::NodeControlMsg;
+use otel_arrow_dfe_engine::error::{Error, ExporterErrorKind, format_error_sources};
+use otel_arrow_dfe_engine::exporter::ExporterWrapper;
+use otel_arrow_dfe_engine::local::exporter::{EffectHandler, Exporter};
+use otel_arrow_dfe_engine::message::{ExporterInbox, Message};
+use otel_arrow_dfe_engine::node::NodeId;
+use otel_arrow_dfe_engine::terminal_state::TerminalState;
+use otel_arrow_dfe_otap::OTAP_EXPORTER_FACTORIES;
+use otel_arrow_dfe_otap::metrics::ExporterPDataExportMetrics;
+use otel_arrow_dfe_otap::pdata::OtapPdata;
+use otel_arrow_dfe_pdata::OtapArrowRecords;
+use otel_arrow_dfe_pdata::TryIntoWithOptions;
+use otel_arrow_dfe_pdata::proto::opentelemetry::arrow::v1::ArrowPayloadType;
+use otel_arrow_dfe_telemetry::common_attributes::{Outcome, SignalOutcomeAttributes};
+use otel_arrow_dfe_telemetry::metrics::MetricSetHandler;
+use otel_arrow_dfe_telemetry::metrics::{MeasurementMetricSet, MetricSet};
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -111,12 +111,12 @@ impl ClickhouseExporter {
     pub fn from_config(
         pipeline_ctx: PipelineContext,
         config: &serde_json::Value,
-    ) -> Result<Self, otap_df_config::error::Error> {
+    ) -> Result<Self, otel_arrow_dfe_config::error::Error> {
         let ch_metrics = pipeline_ctx.register_metrics::<ClickhouseExporterMetrics>();
         let pdata_metrics = ExporterPDataExportMetrics::register(&pipeline_ctx);
 
         let patch: ConfigPatch = serde_json::from_value(config.clone()).map_err(|e| {
-            otap_df_config::error::Error::InvalidUserConfig {
+            otel_arrow_dfe_config::error::Error::InvalidUserConfig {
                 error: e.to_string(),
             }
         })?;
@@ -177,7 +177,7 @@ impl ClickhouseExporter {
                     })
                     .messages
                     .inc();
-                otap_df_telemetry::otel_warn!(
+                otel_arrow_dfe_telemetry::otel_warn!(
                     "clickhouse.exporter.write.error",
                     message = format!("Error writing batch to clickhouse: {error}"),
                     signal_type = format!("{signal_type:?}"),
@@ -192,24 +192,25 @@ impl ClickhouseExporter {
 /// Unsafe code is temporarily used here to allow the use of `distributed_slice` macro
 /// This macro is part of the `linkme` crate which is considered safe and well maintained.
 #[allow(unsafe_code)]
-#[otap_df_engine::component_inventory(category = Exporter)]
+#[otel_arrow_dfe_engine::component_inventory(category = Exporter)]
 #[distributed_slice(OTAP_EXPORTER_FACTORIES)]
 pub static CLICKHOUSE_EXPORTER: ExporterFactory<OtapPdata> = ExporterFactory {
     name: CLICKHOUSE_EXPORTER_URN,
-    create: |pipeline: PipelineContext,
-             node: NodeId,
-             node_config: Arc<NodeUserConfig>,
-             exporter_config: &ExporterConfig,
-             _capabilities: &otap_df_engine::capability::registry::Capabilities| {
-        Ok(ExporterWrapper::local(
-            ClickhouseExporter::from_config(pipeline, &node_config.config)?,
-            node,
-            node_config,
-            exporter_config,
-        ))
-    },
+    create:
+        |pipeline: PipelineContext,
+         node: NodeId,
+         node_config: Arc<NodeUserConfig>,
+         exporter_config: &ExporterConfig,
+         _capabilities: &otel_arrow_dfe_engine::capability::registry::Capabilities| {
+            Ok(ExporterWrapper::local(
+                ClickhouseExporter::from_config(pipeline, &node_config.config)?,
+                node,
+                node_config,
+                exporter_config,
+            ))
+        },
     validate_config: validate_typed_config::<ConfigPatch>,
-    wiring_contract: otap_df_engine::wiring_contract::WiringContract::UNRESTRICTED,
+    wiring_contract: otel_arrow_dfe_engine::wiring_contract::WiringContract::UNRESTRICTED,
 };
 
 #[async_trait(?Send)]
@@ -220,7 +221,7 @@ impl Exporter<OtapPdata> for ClickhouseExporter {
         effect_handler: EffectHandler<OtapPdata>,
     ) -> Result<TerminalState, Error> {
         let exporter_id = effect_handler.exporter_id();
-        otap_df_telemetry::otel_info!(
+        otel_arrow_dfe_telemetry::otel_info!(
             "clickhouse.exporter.start",
             message = "Clickhouse exporter starting",
             endpoint = self.config.endpoint,
@@ -264,7 +265,7 @@ impl Exporter<OtapPdata> for ClickhouseExporter {
 
             match message {
                 Message::Control(NodeControlMsg::Shutdown { deadline, .. }) => {
-                    otap_df_telemetry::otel_info!(
+                    otel_arrow_dfe_telemetry::otel_info!(
                         "clickhouse.exporter.shutdown",
                         message = "Clickhouse exporter shutting down",
                     );
@@ -274,7 +275,7 @@ impl Exporter<OtapPdata> for ClickhouseExporter {
                         })
                         .await;
                     if abandoned > 0 {
-                        otap_df_telemetry::otel_warn!(
+                        otel_arrow_dfe_telemetry::otel_warn!(
                             "clickhouse.exporter.shutdown.deadline_exceeded",
                             message = "ClickHouse writes abandoned at the shutdown deadline",
                             abandoned_writes = abandoned,
@@ -310,7 +311,7 @@ impl Exporter<OtapPdata> for ClickhouseExporter {
                                 })
                                 .messages
                                 .inc();
-                            otap_df_telemetry::otel_warn!(
+                            otel_arrow_dfe_telemetry::otel_warn!(
                                 "clickhouse.exporter.convert.error",
                                 message =
                                     format!("Failed to convert payload to OtapArrowRecords: {e:?}"),
@@ -371,7 +372,7 @@ impl Exporter<OtapPdata> for ClickhouseExporter {
                                 })
                                 .messages
                                 .inc();
-                            otap_df_telemetry::otel_warn!(
+                            otel_arrow_dfe_telemetry::otel_warn!(
                                 "clickhouse.exporter.transform.error",
                                 message = "Error transforming batch for export.",
                                 error = e.to_string(),

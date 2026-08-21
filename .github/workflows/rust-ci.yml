@@ -210,7 +210,7 @@ jobs:
       - name: Run user_events Linux smoke test when supported
         env:
           OTAP_DF_RUN_USEREVENTS_E2E: "1"
-        run: cargo test --locked -p otel-arrow-dfe-contrib-nodes user_events_linux_e2e_smoke_when_available --features user_events-receiver,otap-df-otap/crypto-ring
+        run: cargo test --locked -p otel-arrow-dfe-contrib-nodes user_events_linux_e2e_smoke_when_available --features user_events-receiver,otel-arrow-dfe-otap/crypto-ring
         working-directory: ./rust/otap-dataflow
 
   etw_windows_smoke:
@@ -717,7 +717,7 @@ jobs:
           OTAP_HOST_METRICS_SEMCONV_REGISTRY: ${{ github.workspace }}/semantic-conventions/model
         run: |
           cargo test --locked -p otel-arrow-dfe-core-nodes \
-            --features dev-tools,otap-df-otap/crypto-ring \
+            --features dev-tools,otel-arrow-dfe-otap/crypto-ring \
             emitted_phase1_metric_shapes_match_weaver_semconv --lib -- --ignored
         working-directory: ./rust/otap-dataflow
 
