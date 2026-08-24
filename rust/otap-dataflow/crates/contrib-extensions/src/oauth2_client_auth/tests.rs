@@ -496,6 +496,10 @@ fn factory_is_registered_with_capability() {
         capabilities.shared.contains(&"bearer_token_provider"),
         "BearerTokenProvider must be advertised as a shared capability"
     );
+    assert!(
+        capabilities.shared.contains(&"client_credential_provider"),
+        "ClientCredentialProvider must be advertised as a shared capability"
+    );
 }
 
 /// Invokes the factory's `create` hook with `config` against a throwaway

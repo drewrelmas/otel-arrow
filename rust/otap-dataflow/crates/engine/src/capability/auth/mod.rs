@@ -6,10 +6,10 @@
 //! Groups the credential-facing capabilities (token provider on the outbound
 //! side, authorizer on the inbound side) with the shared data types they
 //! exchange. The capability traits live in [`agent_fed_credential_provider`],
-//! [`bearer_token_provider`], and [`bearer_token_authorizer`]; the shared data
-//! types ([`BearerToken`], [`AuthorizedIdentity`], [`AuthzDecision`],
-//! [`DenyReason`]) live in [`models`] and are re-exported here so consumers
-//! reach them at
+//! [`bearer_token_provider`], [`bearer_token_authorizer`], and
+//! [`client_credential_provider`]; the shared data types ([`BearerToken`],
+//! [`AuthorizedIdentity`], [`AuthzDecision`], [`DenyReason`]) live in
+//! [`models`] and are re-exported here so consumers reach them at
 //! `capability::auth::{BearerToken, AuthorizedIdentity, AuthzDecision, DenyReason}`.
 
 mod models;
@@ -17,5 +17,7 @@ mod models;
 pub mod agent_fed_credential_provider;
 pub mod bearer_token_authorizer;
 pub mod bearer_token_provider;
+pub mod client_credential_provider;
+pub mod projections;
 
 pub use models::{AuthorizedIdentity, AuthzDecision, BearerToken, ClaimValue, DenyReason};

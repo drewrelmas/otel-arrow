@@ -28,6 +28,7 @@ use otel_arrow_dfe_config::error::Error as ConfigError;
 use otel_arrow_dfe_config::extension::ExtensionUserConfig;
 use otel_arrow_dfe_engine::ExtensionFactory;
 use otel_arrow_dfe_engine::capability::auth::bearer_token_provider::BearerTokenProvider;
+use otel_arrow_dfe_engine::capability::auth::client_credential_provider::ClientCredentialProvider;
 use otel_arrow_dfe_engine::config::ExtensionConfig;
 use otel_arrow_dfe_engine::context::ExtensionContext;
 use otel_arrow_dfe_engine::extension::wrapper::ExtensionVariant;
@@ -115,10 +116,10 @@ fn create(
 #[distributed_slice(OTAP_EXTENSION_FACTORIES)]
 pub static AZURE_IDENTITY_AUTH_EXTENSION: ExtensionFactory = ExtensionFactory {
     name: AZURE_IDENTITY_AUTH_URN,
-    description: "Active+Shared extension exposing BearerTokenProvider via azure_identity",
+    description: "Active+Shared extension exposing bearer and typed client credentials via azure_identity",
     documentation_url: "",
     capabilities: Some(extension_capabilities!(
-        shared: AzureIdentityAuthExtension => [BearerTokenProvider]
+        shared: AzureIdentityAuthExtension => [BearerTokenProvider, ClientCredentialProvider]
     )),
     create,
     validate_config,

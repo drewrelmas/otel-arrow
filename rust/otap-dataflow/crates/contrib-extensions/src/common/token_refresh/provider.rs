@@ -14,11 +14,15 @@ use otel_arrow_dfe_engine::capability::auth::BearerToken;
 use otel_arrow_dfe_engine::capability::auth::bearer_token_provider::{
     BearerTokenProvider as BearerTokenProviderCap, TOKEN_USABLE_MARGIN, TokenStream,
 };
+use otel_arrow_dfe_engine::capability::auth::client_credential_provider::{
+    ClientCredential, CredentialProjection, CredentialSnapshot, CredentialStream,
+};
 use otel_arrow_dfe_engine::capability::{CapabilityError, CapabilityErrorSource};
 use otel_arrow_dfe_engine::control::ExtensionControlMsg;
 use otel_arrow_dfe_engine::error::Error as EngineError;
 use otel_arrow_dfe_engine::extension::EffectHandler;
 use otel_arrow_dfe_engine::shared::capability::auth::bearer_token_provider::BearerTokenProvider as SharedBearerTokenProvider;
+use otel_arrow_dfe_engine::shared::capability::auth::client_credential_provider::ClientCredentialProvider as SharedClientCredentialProvider;
 use otel_arrow_dfe_engine::shared::extension::{ControlChannel, Extension as SharedExtension};
 use otel_arrow_dfe_engine::terminal_state::TerminalState;
 use rand::RngExt;
@@ -356,6 +360,35 @@ impl<S: TokenSource, M: TokenProviderMetrics> SharedBearerTokenProvider
         // item is a plain `BearerToken`: a refresh failure does not terminate
         // the subscription, it simply does not emit until the next success.
         let stream = WatchStream::new(rx).filter_map(|opt| async move { opt });
+        Box::pin(stream)
+    }
+}
+
+#[async_trait]
+impl<S: TokenSource, M: TokenProviderMetrics> SharedClientCredentialProvider
+    for TokenProviderExtension<S, M>
+{
+    fn supports(&self, projection: CredentialProjection) -> bool {
+        matches!(
+            projection,
+            CredentialProjection::AuthorizationHeader | CredentialProjection::BearerAccessToken
+        )
+    }
+
+    async fn current(&self) -> Result<CredentialSnapshot, CapabilityError> {
+        let token = SharedBearerTokenProvider::get_token(self).await?;
+        let expires_on = token.expires_on();
+        Ok(CredentialSnapshot::new(
+            ClientCredential::from_bearer_token(token),
+            expires_on,
+        ))
+    }
+
+    fn credential_stream(&self) -> CredentialStream {
+        let stream = SharedBearerTokenProvider::token_stream(self).map(|token| {
+            let expires_on = token.expires_on();
+            CredentialSnapshot::new(ClientCredential::from_bearer_token(token), expires_on)
+        });
         Box::pin(stream)
     }
 }

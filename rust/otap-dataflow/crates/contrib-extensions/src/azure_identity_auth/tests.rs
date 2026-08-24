@@ -10,6 +10,7 @@ use azure_core::credentials::{AccessToken, TokenCredential, TokenRequestOptions}
 use azure_core::time::{Duration as AzureDuration, OffsetDateTime};
 use futures::StreamExt;
 use otel_arrow_dfe_config::error::Error as ConfigError;
+use otel_arrow_dfe_engine::capability::auth::projections::bearer_access_token;
 use otel_arrow_dfe_engine::shared::capability::auth::bearer_token_provider::BearerTokenProvider as SharedBearerTokenProvider;
 use otel_arrow_dfe_telemetry::registry::TelemetryRegistryHandle;
 use otel_arrow_dfe_telemetry::testing::EmptyAttributes;
@@ -134,6 +135,10 @@ fn factory_is_registered_with_capability() {
     assert!(
         capabilities.shared.contains(&"bearer_token_provider"),
         "BearerTokenProvider must be advertised as a shared capability"
+    );
+    assert!(
+        capabilities.shared.contains(&"client_credential_provider"),
+        "ClientCredentialProvider must be advertised as a shared capability"
     );
 }
 
@@ -291,6 +296,25 @@ fn make_tracker() -> TokenProviderMetricsTracker<AzureIdentityAuthMetrics> {
     let registry = TelemetryRegistryHandle::new();
     let metric_set = registry.register_metric_set::<AzureIdentityAuthMetrics>(EmptyAttributes());
     TokenProviderMetricsTracker::new(metric_set)
+}
+
+/// Scenario: bind the existing Azure Identity extension through the new bearer access-token projection.
+/// Guarantees: the projection reuses the extension's existing token acquisition and cache.
+#[tokio::test]
+async fn client_credential_projection_reuses_existing_token_provider() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let credential = Arc::new(MockCredential {
+        token: "projected".to_string(),
+        expires_in: AzureDuration::minutes(60),
+        call_count: Arc::clone(&calls),
+    });
+    let ext = make_extension(credential);
+
+    let source = bearer_access_token::bind(Box::new(ext)).expect("Azure supports bearer tokens");
+    let projected = source.current().await.expect("projected access token");
+
+    assert_eq!(projected.expose_token(), "projected");
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
 }
 
 #[tokio::test]
