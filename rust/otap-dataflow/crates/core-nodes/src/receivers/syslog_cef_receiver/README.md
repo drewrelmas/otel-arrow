@@ -560,7 +560,9 @@ This receiver opts into the shared `receiver.received` and
 `receiver.processing` metric sets. See the
 [shared receiver contract](../../../../../docs/telemetry/metrics-guide.md#shared-receiver-and-exporter-boundary-metrics)
 for their definitions and telemetry policy. Entity context includes the fixed
-`protocol` (`tcp` or `udp`); classified messages use `signal=logs`.
+`protocol` (`tcp` or `udp`). The `receiver.received` metrics use `signal=logs`
+for classified messages; `receiver.processing.duration` has no measurement
+attributes.
 
 Each UDP datagram or emitted TCP frame records one shared receiver observation
 when receiver-local handling terminates. TCP payload size excludes the newline
